@@ -146,6 +146,8 @@ def rotate():
             add_var_name().
             parse_args())
     ds, ds_config = init_dataset(args)
-    rotate_dataset(args.reference, ds_config)
+    if args.var_names:
+        rotate_dataset(args.reference, ds_config, vars_to_rotate=args.var_names)
+    else:
+        rotate_dataset(args.reference, ds_config)
     ds_config.save_config()
-
