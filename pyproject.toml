@@ -18,6 +18,7 @@ dependencies = [
     "download-toolbox",
     "orjson",
 	"pip>=23.3",
+	"scitools-iris",
 	"wheel>=0.38.1",
 ]
 classifiers = [
