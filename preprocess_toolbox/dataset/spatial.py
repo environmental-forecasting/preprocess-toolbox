@@ -10,7 +10,7 @@ import pandas as pd
 import xarray as xr
 import scipy.interpolate as interpolate
 
-from download_toolbox.dataset import DatasetConfig
+from download_toolbox.interface import DatasetConfig
 
 
 def spatial_interpolation(da: xr.DataArray,
