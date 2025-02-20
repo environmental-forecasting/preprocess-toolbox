@@ -71,7 +71,7 @@ class NormalisingChannelProcessor(Processor):
 
         self._anom_clim_splits = [] if anom_clim_splits is None else anom_clim_splits
         self._anom_vars = anomoly_vars if anomoly_vars else []
-        self._dataset_config = dataset_config.config_file
+        self._dataset_config = dataset_config.config_path
         # This is important to inherit from the dataset and carry forward, it has a lot of downstream impact
         # TODO: time and spatial information validation - if the source changes what do we do!?
         self._frequency = dataset_config.frequency
@@ -542,7 +542,7 @@ class NormalisingChannelProcessor(Processor):
                 else:
                     self._process_channel(var_name, var_suffix)
 
-        self.save_config(config_path=config_path)
+        self.save_config()
 
     @property
     def anom_split_dates(self) -> list:

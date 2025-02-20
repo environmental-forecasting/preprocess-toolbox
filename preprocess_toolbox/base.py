@@ -36,6 +36,7 @@ class Processor(DataCollection):
                  absolute_vars: list,
                  identifier: str,
                  base_path: os.PathLike = os.path.join(".", "processed"),
+                 config_path: os.PathLike = None,
                  dtype: np.typecodes = np.float32,
                  processed_files: dict = None,
                  update_key: str = None,
@@ -52,11 +53,12 @@ class Processor(DataCollection):
             **kwargs:
         """
         super().__init__(base_path=base_path,
+                         config_path=config_path,
                          config_type="processed",
                          identifier=identifier,
                          path_components=[])
 
-        self.config.directory = "."
+        self.config.output_path = "." if config_path is None else config_path
 
         self._abs_vars = absolute_vars if absolute_vars else []
         self._dtype = dtype

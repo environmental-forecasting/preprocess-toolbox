@@ -34,6 +34,7 @@ def process_dataset():
                           splits,
                           args.abs,
                           anom_clim_splits=args.processing_splits,
+                          config_path=args.config,
                           identifier=args.destination_id,
                           # TODO: nomenclature is old here, lag and lead make sense in forecasting, but not in here
                           #  so this mapping should be revised throughout the library - we don't necessarily forecast!
@@ -48,7 +49,8 @@ def process_dataset():
 
 
 def init_dataset(args):
-    ds_config = get_dataset_config_implementation(args.source)
+    ds_config = get_dataset_config_implementation(args.source,
+                                                  output_path=args.config)
 
     if args.destination_id is not None:
         splits = process_split_args(args, frequency=ds_config.frequency)
@@ -96,8 +98,7 @@ def missing_time():
                                    ds_config,
                                    var_name)
 
-    ds_config.save_data_for_config(config_path=args.config,
-                                   source_ds=ds)
+    ds_config.save_data_for_config(source_ds=ds)
 
 
 def missing_spatial():
@@ -125,8 +126,7 @@ def missing_spatial():
                                              args.masks,
                                              save_comparison_fig=False)
 
-    ds_config.save_data_for_config(config_path=args.config,
-                                   source_ds=ds)
+    ds_config.save_data_for_config(source_ds=ds)
 
 
 def regrid():
@@ -137,7 +137,7 @@ def regrid():
             parse_args())
     ds, ds_config = init_dataset(args)
     regrid_dataset(args.reference, ds_config)
-    ds_config.save_config(config_path=args.config)
+    ds_config.save_config()
 
 
 def rotate():
@@ -152,5 +152,5 @@ def rotate():
         rotate_dataset(args.reference, ds_config, vars_to_rotate=args.var_names)
     else:
         rotate_dataset(args.reference, ds_config)
-    ds_config.save_config(config_path=args.config)
+    ds_config.save_config()
 
