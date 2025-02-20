@@ -529,7 +529,8 @@ class NormalisingChannelProcessor(Processor):
             "No post normalisation implemented for {}".format(var_name))
         return da
 
-    def process(self):
+    def process(self,
+                config_path: os.PathLike = None):
         var_suffixes = ["abs", "anom"]
         var_lists = [getattr(self, "_{}_vars".format(vs)) for vs in var_suffixes]
         for var_suffix, var_list in zip(var_suffixes, var_lists):
@@ -541,7 +542,7 @@ class NormalisingChannelProcessor(Processor):
                 else:
                     self._process_channel(var_name, var_suffix)
 
-        self.save_config()
+        self.save_config(config_path=config_path)
 
     @property
     def anom_split_dates(self) -> list:

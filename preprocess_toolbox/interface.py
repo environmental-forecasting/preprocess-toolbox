@@ -4,8 +4,7 @@ import sys
 
 import orjson
 
-from download_toolbox.interface import get_dataset_config_implementation
-from preprocess_toolbox.utils import get_implementation
+from download_toolbox.interface import get_dataset_config_implementation, get_implementation
 
 
 def get_processor_implementation(config: os.PathLike) -> object:

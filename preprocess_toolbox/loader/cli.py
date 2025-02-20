@@ -4,13 +4,10 @@ import os
 
 import orjson
 
-import preprocess_toolbox.utils
-from preprocess_toolbox.cli import BaseArgParser, csv_arg
-from preprocess_toolbox.loader.utils import update_config
-from preprocess_toolbox.utils import get_implementation
+from preprocess_toolbox.cli import BaseArgParser
+from preprocess_toolbox.utils import get_config_filename, update_config
 
-
-from download_toolbox.interface import get_dataset_config_implementation
+from download_toolbox.interface import get_dataset_config_implementation, get_implementation
 
 
 class LoaderArgParser(BaseArgParser):
@@ -29,6 +26,7 @@ class LoaderArgParser(BaseArgParser):
 
         if source:
             self.add_argument("source",
+                              help="A complete path to a source configuration",
                               type=str)
 
         self.add_argument("name",
@@ -38,13 +36,6 @@ class LoaderArgParser(BaseArgParser):
         self.add_argument("configurations",
                           type=argparse.FileType("r"),
                           nargs="+")
-        return self
-
-    def add_prefix(self):
-        self.add_argument("-p",
-                          "--prefix",
-                          type=str,
-                          default="loader")
         return self
 
     def add_sections(self):
@@ -73,9 +64,7 @@ class MetaArgParser(LoaderArgParser):
 
 
 def create():
-    args = (LoaderArgParser().
-            add_prefix().
-            parse_args())
+    args = LoaderArgParser().parse_args()
 
     data = dict(
         identifier=args.name,
@@ -84,12 +73,12 @@ def create():
         masks=dict(),
         channels=dict(),
     )
-    destination_filename = "{}.{}.json".format(args.prefix, args.name)
+    destination_path = get_config_filename(args)
 
-    if not os.path.exists(destination_filename):
-        with open(destination_filename, "w") as fh:
+    if not os.path.exists(destination_path):
+        with open(destination_path, "w") as fh:
             fh.write(orjson.dumps(data, option=orjson.OPT_INDENT_2).decode())
-        logging.info("Created a configuration {} to build on".format(destination_filename))
+        logging.info("Created a configuration {} to build on".format(destination_path))
     else:
         raise FileExistsError("It's pretty pointless calling init on an existing configuration, "
                               "perhaps delete the file first and go for it")
@@ -105,7 +94,7 @@ def copy():
     with open(args.source, "r") as fh:
         source_data = orjson.loads(fh.read())
 
-    with open(args.name, "r") as fh:
+    with open(get_config_filename(args), "r") as fh:
         dest_data = orjson.loads(fh.read())
 
     for segment in args.segments:
@@ -113,7 +102,7 @@ def copy():
         dest_data[segment] = source_data[segment]
 
     logging.info("Outputting {}".format(args.name))
-    with open(args.name, "w") as fh:
+    with open(get_config_filename(args), "w") as fh:
         fh.write(orjson.dumps(dest_data, option=orjson.OPT_INDENT_2).decode())
 
 
@@ -135,8 +124,8 @@ def add_processed():
         filenames[name] = fh.name
         fh.close()
 
-    update_config(args.name, "filenames", filenames)
-    update_config(args.name, "sources", cfgs)
+    update_config(get_config_filename(args), "filenames", filenames)
+    update_config(get_config_filename(args), "sources", cfgs)
 
 
 def get_channel_info_from_processor(cfg_segment: str):
@@ -150,7 +139,9 @@ def get_channel_info_from_processor(cfg_segment: str):
                           [args.channel_name,],
                           args.channel_name)
     processor.process()
-    update_config(args.name, cfg_segment, {args.channel_name: processor.get_config()})
+    update_config(get_config_filename(args),
+                  cfg_segment,
+                  {args.channel_name: processor.get_config()})
 
 
 def add_channel():

@@ -2,7 +2,7 @@ import logging
 
 from dateutil.relativedelta import relativedelta
 
-from download_toolbox.interface import get_dataset_config_implementation
+from download_toolbox.interface import get_dataset_config_implementation, get_implementation
 
 from preprocess_toolbox.dataset.process import regrid_dataset, rotate_dataset
 from preprocess_toolbox.dataset.spatial import spatial_interpolation
@@ -10,7 +10,7 @@ from preprocess_toolbox.dataset.time import process_missing_dates
 from preprocess_toolbox.cli import ProcessingArgParser, process_split_args, csv_arg
 from preprocess_toolbox.interface import get_processor_from_source
 from preprocess_toolbox.processor import NormalisingChannelProcessor
-from preprocess_toolbox.utils import get_config, get_implementation
+from preprocess_toolbox.utils import get_config
 
 
 def process_dataset():
@@ -44,7 +44,7 @@ def process_dataset():
                           normalisation_splits=args.processing_splits,
                           parallel_opens=args.parallel_opens or False,
                           ref_procdir=args.ref)
-    proc.process()
+    proc.process(config_path=args.config)
 
 
 def init_dataset(args):
@@ -96,7 +96,8 @@ def missing_time():
                                    ds_config,
                                    var_name)
 
-    ds_config.save_data_for_config(source_ds=ds)
+    ds_config.save_data_for_config(config_path=args.config,
+                                   source_ds=ds)
 
 
 def missing_spatial():
@@ -124,7 +125,8 @@ def missing_spatial():
                                              args.masks,
                                              save_comparison_fig=False)
 
-    ds_config.save_data_for_config(source_ds=ds)
+    ds_config.save_data_for_config(config_path=args.config,
+                                   source_ds=ds)
 
 
 def regrid():
@@ -135,7 +137,7 @@ def regrid():
             parse_args())
     ds, ds_config = init_dataset(args)
     regrid_dataset(args.reference, ds_config)
-    ds_config.save_config()
+    ds_config.save_config(config_path=args.config)
 
 
 def rotate():
@@ -150,4 +152,5 @@ def rotate():
         rotate_dataset(args.reference, ds_config, vars_to_rotate=args.var_names)
     else:
         rotate_dataset(args.reference, ds_config)
-    ds_config.save_config()
+    ds_config.save_config(config_path=args.config)
+
