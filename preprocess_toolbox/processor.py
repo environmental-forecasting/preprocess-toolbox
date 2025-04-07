@@ -254,7 +254,7 @@ class NormalisingChannelProcessor(Processor):
                 logging.info("Got {} files for {}:{}".format(len(var_files), split, var_name))
         logging.debug(pformat(self._source_files))
 
-    def _normalise_array_mean(self, var_name: str, da: object):
+    def _normalise_array_mean(self, var_name: str, da: object, denormalise: bool=False):
         """
         Using the *training* data only, compute the mean and
         standard deviation of the input raw satellite DataArray (`da`)
@@ -297,13 +297,16 @@ class NormalisingChannelProcessor(Processor):
             raise RuntimeError("Either a normalisation file or normalisation split dates "
                                "must be supplied")
 
-        new_da = (da - mean) / std
+        if not denormalise:
+            new_da = (da - mean) / std
+        else:
+            new_da = da * std + mean
 
         if self._refdir is None:
             open(mean_path, "w").write(",".join([str(f) for f in [float(mean), float(std)]]))
         return new_da
 
-    def _normalise_array_scaling(self, var_name: str, da: object):
+    def _normalise_array_scaling(self, var_name: str, da: object, denormalise: bool=False):
         """
 
         :param var_name:
@@ -339,7 +342,11 @@ class NormalisingChannelProcessor(Processor):
             raise RuntimeError("Either a normalisation file or training data "
                                "must be supplied")
 
-        new_da = (da - minimum) / (maximum - minimum)
+        if not denormalise:
+            new_da = (da - minimum) / (maximum - minimum)
+        else:
+            new_da = da * (maximum - minimum) + minimum
+
         if self._refdir is None:
             open(scale_path, "w").write(",".join([str(f) for f in [float(minimum), float(maximum)]]))
         return new_da
