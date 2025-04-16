@@ -134,9 +134,27 @@ def regrid():
             add_ref_ds().
             add_destination().
             add_splits().
+            add_extra_args([
+                (("-cp", "--coord-method"), dict(default=None, type=str,
+                                                 help="Method that processes cube prior to regrid")),
+                (("-ca", "--coord-method-args"), dict(default=[], type=csv_arg,
+                                                      help="CSV of simple arguments for coord-method")),
+                (("-rp", "--regrid-method"), dict(default=None, type=str,
+                                                  help="Method that processes cube data after regrid")),
+                (("-ra", "--regrid-method-args"), dict(default=[], type=str,
+                                                       help="CSV of simple arguments for regrid-method")),
+            ]).
             parse_args())
     ds, ds_config = init_dataset(args)
-    regrid_dataset(args.reference, ds_config)
+
+    coord_proc = get_implementation(args.coord_method) if args.coord_method is not None else None
+    regrid_proc = get_implementation(args.regrid_method) if args.regrid_method is not None else None
+
+    regrid_dataset(args.reference, ds_config,
+                   coord_processing=coord_proc,
+                   coord_processing_args=args.coord_method_args,
+                   regrid_processing=regrid_proc,
+                   regrid_processing_args=args.regrid_method_args)
     ds_config.save_config()
 
 

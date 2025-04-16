@@ -15,7 +15,11 @@ from preprocess_toolbox.dataset.spatial import (gridcell_angles_from_dim_coords,
 
 def regrid_dataset(ref_file: os.PathLike,
                    process_config: DatasetConfig,
-                   regrid_processing: callable = None):
+                   coord_processing: callable = None,
+                   coord_processing_args: list = None,
+                   regrid_processing: callable = None,
+                   regrid_processing_args: list = None,
+                   ):
     """
 
     TODO: we need to incorporate OSISAF / SIC grounc truth cube generation into the IceNet library
@@ -27,7 +31,10 @@ def regrid_dataset(ref_file: os.PathLike,
 
     :param ref_file:
     :param process_config:
+    :param coord_processing:
+    :param coord_processing_args:
     :param regrid_processing:
+    :param regrid_processing_args:
     """
     logging.info("Regridding dataset")
 
@@ -48,13 +55,19 @@ def regrid_dataset(ref_file: os.PathLike,
         try:
             cube = iris.load_cube(regrid_datafile)
 
-            # TODO: there is a lot of assumption here - introduce some defense
-            if cube.coord_system() is None:
-                cs = ref_cube.coord_system().ellipsoid
+            # TODO: this assumes a lot, and also should be contained in the icenet library by default
+            if coord_processing is None:
+                if cube.coord_system() is None:
+                    logging.warning("We have not detected a coordinate system and have "
+                                    "no method to apply, copying from ref_cube for lat/long")
+                    cs = ref_cube.coord_system().ellipsoid
 
-                for coord in ['longitude', 'latitude']:
-                    cube.coord(coord).coord_system = cs
-
+                    for coord in ['longitude', 'latitude']:
+                        cube.coord(coord).coord_system = cs
+            else:
+                logging.info("Providing coordinate system transform method being run: {}".format(coord_processing))
+                coord_processing_args = tuple() if coord_processing_args is None else coord_processing_args
+                cube = coord_processing(ref_cube, cube, *coord_processing_args)
             cube_regridded = cube.regrid(ref_cube, iris.analysis.Linear())
 
         except iris.exceptions.CoordinateNotFoundError:
@@ -63,7 +76,8 @@ def regrid_dataset(ref_file: os.PathLike,
 
         if regrid_processing is not None:
             logging.debug("Calling regrid processing callable: {}".format(regrid_processing))
-            cube_regridded = regrid_processing(cube_regridded)
+            regrid_processing_args = tuple() if regrid_processing_args is None else regrid_processing_args
+            cube_regridded = regrid_processing(ref_cube, cube_regridded, *regrid_processing_args)
 
         logging.debug("Saving regridded data to {}... ".format(datafile))
         iris.save(cube_regridded, datafile, fill_value=np.nan)

@@ -135,6 +135,13 @@ def get_channel_info_from_processor(cfg_segment: str):
 
     proc_impl = get_implementation(args.implementation)
     ds_config = get_dataset_config_implementation(args.ground_truth_dataset)
+
+    if args.config is not None:
+        # FIXME: args.config contains the location of the dataset config on render, but
+        #   this is not part of this pattern! DS is either ground truth or in derived class,
+        #   but this library doesn't care or know of it respectively.
+        raise RuntimeError("--config-path is invalid for this CLI endpoint, sorry...")
+
     processor = proc_impl(ds_config,
                           [args.channel_name,],
                           args.channel_name)
