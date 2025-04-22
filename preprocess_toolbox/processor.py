@@ -354,117 +354,123 @@ class NormalisingChannelProcessor(Processor):
         """
 
         with dask.config.set(**{'array.slicing.split_large_chunks': True}):
-            source_files = list(sorted(set([file
-                                            for split, var_files in self.source_files.items()
-                                            for vn, files in var_files.items()
-                                            for file in files
-                                            if var_name == vn])))
+            try:
+                source_files = list(sorted(set([file
+                                                for split, var_files in self.source_files.items()
+                                                for vn, files in var_files.items()
+                                                for file in files
+                                                if var_name == vn])))
 
-            if len(source_files) > 0:
-                logging.info("Opening {} files for {}".format(len(source_files), var_name))
+                if len(source_files) > 0:
+                    logging.info("Opening {} files for {}".format(len(source_files), var_name))
 
-                # In the old IceNet library there was dubiousness about the source of the
-                # data so this was harder. Now we work with whatever we get from download-toolbox
-                ds = xr.open_mfdataset(
-                    source_files,
-                    # Solves issue with inheriting files without
-                    # time dimension (only having coordinate)
-                    combine="nested",
-                    concat_dim="time",
-                    coords="minimal",
-                    compat="override",
-                    # TODO: review this, but if lat-lon is in the file, it's signalling bigger issues
-                    # drop_variables=("lat", "lon"),
-                    parallel=self._parallel)
-                da = getattr(ds, var_name)
-                da = da.astype(self.dtype)
+                    # In the old IceNet library there was dubiousness about the source of the
+                    # data so this was harder. Now we work with whatever we get from download-toolbox
+                    ds = xr.open_mfdataset(
+                        source_files,
+                        # Solves issue with inheriting files without
+                        # time dimension (only having coordinate)
+                        combine="nested",
+                        concat_dim="time",
+                        coords="minimal",
+                        compat="override",
+                        # TODO: review this, but if lat-lon is in the file, it's signalling bigger issues
+                        # drop_variables=("lat", "lon"),
+                        parallel=self._parallel)
+                    da = getattr(ds, var_name)
+                    da = da.astype(self.dtype)
 
-                # FIXME: we should ideally store train dates against the
-                #  normalisation and climatology, to ensure recalculation on
-                #  reprocess. All this need be is in the path, to be honest
+                    # FIXME: we should ideally store train dates against the
+                    #  normalisation and climatology, to ensure recalculation on
+                    #  reprocess. All this need be is in the path, to be honest
 
-                if var_suffix == "anom":
-                    if len(self._anom_clim_splits) < 1 and self._refdir is None:
-                        raise ProcessingError("You must provide a list of splits via "
-                                              "anom_clim_splits if you have anomoly channels")
-
-                    if self._refdir is not None:
-                        logging.info("Loading climatology from alternate directory: {}".format(self._refdir))
-                        clim_path = os.path.join(self._refdir, "params", "climatology.{}".format(var_name))
-                    else:
-                        clim_path = os.path.join(self.get_data_var_folder("params"), "climatology.{}".format(var_name))
-
-                    # TODO: farm out with adaptive frequency the generation of climatologies
-                    if not os.path.exists(clim_path):
-                        logging.info("Generating climatology {}".format(clim_path))
-
-                        if len(self.anom_split_dates) > 0:
-                            climatology = da.sel(time=self.anom_split_dates).\
-                                groupby('time.month', restore_coord_dims=True).\
-                                mean()
-
-                            climatology.to_netcdf(clim_path)
-                        else:
-                            raise ProcessingError(
-                                "{} does not exist and no dates are supplied valid for generation".
-                                format(clim_path))
-                    else:
-                        logging.info("Reusing climatology {}".format(clim_path))
-                        climatology = xr.open_dataarray(clim_path)
-
-                    if not set(da.groupby("time.month").all().month.values).\
-                            issubset(set(climatology.month.values)):
-                        logging.warning(
-                            "We don't have a full climatology ({}) "
-                            "compared with data ({})".format(
-                                ",".join(
-                                    [str(i) for i in climatology.month.values]),
-                                ",".join([
-                                    str(i) for i in da.groupby(
-                                        "time.month").all().month.values
-                                ])))
-                        da = da - climatology.mean()
-                    else:
-                        da = da.groupby("time.month") - climatology
-
-                da = self.pre_normalisation(var_name, da)
-                # We don't do this (https://github.com/tom-andersson/icenet2/
-                # blob/4ca0f1300fbd82335d8bb000c85b1e71855630fa/icenet2/utils.py#L520) any more
-
-                if self._linear_trends is not None:
-                    if var_name in self._linear_trends and var_suffix == "abs":
-                        # TODO: verify, this used to be da = , but we should not be
-                        #  overwriting the abs da with linear trend da
-                        ref_da = None
+                    if var_suffix == "anom":
+                        if len(self._anom_clim_splits) < 1 and self._refdir is None:
+                            raise ProcessingError("You must provide a list of splits via "
+                                                  "anom_clim_splits if you have anomoly channels")
 
                         if self._refdir is not None:
-                            logging.info(
-                                "We have a reference {}, so will load "
-                                "and supply abs from that for linear trend of "
-                                "{}".format(self._refdir, var_name))
-                            ref_da = xr.open_dataarray(
-                                os.path.join(self._refdir, "{}_{}.nc".format(var_name, var_suffix)))
+                            logging.info("Loading climatology from alternate directory: {}".format(self._refdir))
+                            clim_path = os.path.join(self._refdir, "params", "climatology.{}".format(var_name))
+                        else:
+                            clim_path = os.path.join(self.get_data_var_folder("params"), "climatology.{}".format(var_name))
 
-                        self._build_linear_trend_da(da, var_name, ref_da=ref_da)
+                        # TODO: farm out with adaptive frequency the generation of climatologies
+                        if not os.path.exists(clim_path):
+                            logging.info("Generating climatology {}".format(clim_path))
 
-                    elif var_name in self._linear_trends \
-                            and var_name not in self._abs_vars:
-                        raise NotImplementedError(
-                            "You've asked for linear trend "
-                            "without an  absolute value var: {}".format(var_name))
+                            if len(self.anom_split_dates) > 0:
+                                climatology = da.sel(time=self.anom_split_dates).\
+                                    groupby('time.month', restore_coord_dims=True).\
+                                    mean()
 
-                if var_name in self._no_normalise:
-                    logging.info("No normalisation for {}".format(var_name))
+                                climatology.to_netcdf(clim_path)
+                            else:
+                                raise ProcessingError(
+                                    "{} does not exist and no dates are supplied valid for generation".
+                                    format(clim_path))
+                        else:
+                            logging.info("Reusing climatology {}".format(clim_path))
+                            climatology = xr.open_dataarray(clim_path)
+
+                        if not set(da.groupby("time.month").all().month.values).\
+                                issubset(set(climatology.month.values)):
+                            logging.warning(
+                                "We don't have a full climatology ({}) "
+                                "compared with data ({})".format(
+                                    ",".join(
+                                        [str(i) for i in climatology.month.values]),
+                                    ",".join([
+                                        str(i) for i in da.groupby(
+                                            "time.month").all().month.values
+                                    ])))
+                            da = da - climatology.mean()
+                        else:
+                            da = da.groupby("time.month") - climatology
+
+                    da = self.pre_normalisation(var_name, da)
+                    # We don't do this (https://github.com/tom-andersson/icenet2/
+                    # blob/4ca0f1300fbd82335d8bb000c85b1e71855630fa/icenet2/utils.py#L520) any more
+
+                    if self._linear_trends is not None:
+                        if var_name in self._linear_trends and var_suffix == "abs":
+                            # TODO: verify, this used to be da = , but we should not be
+                            #  overwriting the abs da with linear trend da
+                            ref_da = None
+
+                            if self._refdir is not None:
+                                logging.info(
+                                    "We have a reference {}, so will load "
+                                    "and supply abs from that for linear trend of "
+                                    "{}".format(self._refdir, var_name))
+                                ref_da = xr.open_dataarray(
+                                    os.path.join(self._refdir, "{}_{}.nc".format(var_name, var_suffix)))
+
+                            self._build_linear_trend_da(da, var_name, ref_da=ref_da)
+
+                        elif var_name in self._linear_trends \
+                                and var_name not in self._abs_vars:
+                            raise NotImplementedError(
+                                "You've asked for linear trend "
+                                "without an  absolute value var: {}".format(var_name))
+
+                    if var_name in self._no_normalise:
+                        logging.info("No normalisation for {}".format(var_name))
+                    else:
+                        logging.info("Normalising {}".format(var_name))
+                        da = self._normalise(var_name, da)
+
+                    da = self.post_normalisation(var_name, da)
+
+                    self.save_processed_file(
+                        "{}_{}".format(var_name, var_suffix),
+                        "{}_{}.nc".format(var_name, var_suffix),
+                        da.rename("_".join([var_name, var_suffix])))
                 else:
-                    logging.info("Normalising {}".format(var_name))
-                    da = self._normalise(var_name, da)
-
-                da = self.post_normalisation(var_name, da)
-
-                self.save_processed_file(
-                    "{}_{}".format(var_name, var_suffix),
-                    "{}_{}.nc".format(var_name, var_suffix),
-                    da.rename("_".join([var_name, var_suffix])))
+                    logging.warning("No source files available for {}{}".format(var_name, var_suffix))
+            except KeyError as e:
+                logging.exception("Received KeyError for dataset {} from files {}, "
+                                  "quite often this means required data is missing".format(ds, source_files))
 
     def get_config(self, **kwargs):
         """
