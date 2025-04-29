@@ -4,7 +4,7 @@ from dateutil.relativedelta import relativedelta
 
 from download_toolbox.interface import get_dataset_config_implementation, get_implementation
 
-from preprocess_toolbox.dataset.process import regrid_dataset, rotate_dataset
+from preprocess_toolbox.dataset.process import regrid_dataset, rotate_dataset, reproject_datasets_from_config
 from preprocess_toolbox.dataset.spatial import spatial_interpolation
 from preprocess_toolbox.dataset.time import process_missing_dates
 from preprocess_toolbox.cli import ProcessingArgParser, process_split_args, csv_arg
@@ -172,3 +172,84 @@ def rotate():
         rotate_dataset(args.reference, ds_config)
     ds_config.save_config()
 
+
+def reproject():
+    """
+    Reproject a dataset from one CRS to another CRS.
+
+    Example usage:
+        preprocess_reproject -v -c ./reproject.era5.day.north.json --workers 8 -ps train \
+        -sn train,val,test -ss 2023-1-1,2024-2-1,2024-12-1 -se 2023-12-31,2024-2-14,2024-12-1 \
+        -sh 4 -st 1 --source-crs 'EPSG:4326' --target-crs 'EPSG:6931' --shape 500 \
+        --ease2 data.aws.day.north.json proc.aws
+
+        This command reprojects an ERA5 lat/lon grid (EPSG:4326) to an EASE Grid 2.0 grid
+        (EPSG:6931) with an output shape of (500, 500). The dataset only processes dates
+        for the splits defined: 2023-1-1 to 2024-2-1, 2024-2-1 to 2024-12-1 and
+        2024-12-1 to 2025-1-1.
+        It adds 4 days prior to start and 1 day after due to `-sh` and `-st` flags.
+    """
+    args = (
+        ProcessingArgParser()
+        .add_destination()
+        .add_splits()
+        .add_extra_args(
+            [
+                (("-w", "--workers"), dict(default=1, type=int)),
+                (("-sc", "--source-crs"), dict(
+                        default="EPSG:4326",
+                        type=str,
+                        required=True,
+                        help="Source dataset CRS definition: EPSG code (e.g., `EPSG:4326`)",
+                )),
+                (("-tc", "--target-crs"), dict(
+                        default="EPSG:6931",
+                        type=str,
+                        required=False,
+                        help="Target dataset CRS definition: Full cartopy.crs expression (e.g., `EPSG:6931`)",
+                )),
+                (("-r", "--resolution"), dict(
+                        default=None,
+                        type=float,
+                        required=False,
+                        help="Resolution of output grid (in meters or degrees). Can only specify either `--resolution` or `--shape`, not both",
+                )),
+                (("-s", "--shape"), dict(
+                        default="720,720",
+                        type=str,
+                        required=False,
+                        help="Shape of output grid (in pixels, e.g. '720,720'). Can only specify either `--resolution` or `--shape`, not both",
+                )),
+                (("-e", "--ease2"), dict(
+                        action="store_true",
+                        help="Enable to output an EASE-Grid 2.0 conformal grid",
+                )),
+                (("-cn", "--coarsen"), dict(
+                        default=1,
+                        type=int,
+                        help="To coarsen output grid by this integer factor.",
+                )),
+                (("-in", "--interpolate-nans"), dict(
+                        action="store_true",
+                        help="Enable nearest neighbour interpolation to fill in missing areas.",
+                )),
+            ]
+        )
+        .parse_args()
+    )
+    # Initially copy across the source data from `./data/` to the destination
+    # `./processed_data/`
+    ds, ds_config = init_dataset(args)
+    # Reproject and overwrite the copied data
+    reproject_datasets_from_config(
+        ds_config,
+        source_crs=args.source_crs,
+        target_crs=args.target_crs,
+        resolution=args.resolution,
+        shape=args.shape,
+        ease2=args.ease2,
+        coarsen=args.coarsen,
+        interpolate_nans=args.interpolate_nans,
+        workers=args.workers,
+    )
+    ds_config.save_config()

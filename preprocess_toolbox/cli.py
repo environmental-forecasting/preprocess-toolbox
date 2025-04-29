@@ -158,3 +158,36 @@ def process_split_args(args: object,
 
         splits[split] = sorted(list(split_dates))
     return splits
+
+
+def parse_shape(value: str) -> tuple[int, int]:
+    """
+    Parse a shape argument into a tuple of integers.
+
+    This function takes a string representing shape dimensions.
+    If the input is a single value, it is duplicated to form a tuple of
+    length two. If multiple values are provided, they are converted into
+    a tuple.
+
+    Args:
+        value: A string containing one or more integers separated by commas,
+            representing shape dimensions.
+
+    Returns:
+        A tuple of two integers derived from the input string.
+
+    Examples:
+        parse_shape("5") returns (5, 5)
+        parse_shape("5,6") returns (5, 6)
+    """
+    if isinstance(value, int):
+        return (value, value)
+    else:
+        values = value.split(",")
+
+        # If only one value is provided, repeat it to create a tuple of length 2
+        if len(values) == 1:
+            values.append(values[0])
+        values = map(int, values)
+
+    return tuple(values)
