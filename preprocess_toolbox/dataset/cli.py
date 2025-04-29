@@ -63,8 +63,8 @@ def init_dataset(args):
             for var_config in ds_config.variables:
                 # This is not processing, so we naively extend the range as the split extension args might be set
                 # and if they aren't the preprocessing will dump the dates via Processor
-                lag = relativedelta({"{}s".format(ds_config.frequency.attribute): args.split_head})
-                lead = relativedelta({"{}s".format(ds_config.frequency.attribute): args.split_head})
+                lag = relativedelta(**{"{}s".format(ds_config.frequency.attribute): args.split_head})
+                lead = relativedelta(**{"{}s".format(ds_config.frequency.attribute): args.split_head})
                 min_filepath = ds_config.var_filepath(var_config, [min(split_dates) - lag])
                 max_filepath = ds_config.var_filepath(var_config, [max(split_dates) + lead])
 
