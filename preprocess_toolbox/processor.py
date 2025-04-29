@@ -175,15 +175,21 @@ class NormalisingChannelProcessor(Processor):
         def data_selector(da, processing_date, missing_dates=tuple()):
             target_date = pd.to_datetime(processing_date)
 
-            # TODO: We're assuming the linear trend as a day-res year long application
-            # TODO: I've hacked a leap year in for the mo, but this should be using loc, a simplified clause and isel
-            #  such as by starting with date_da = da.loc[target_date:]
-            date_da = da[(da.time['time.month'] == target_date.month) &
-                         ((da.time['time.day'] == target_date.day) |
-                          (da.time["time.day"] == target_date.day - 1)) &
-                         (da.time <= target_date) &
-                         ~da.time.isin(missing_dates)].\
-                isel(time=slice(0, max_years))
+            if self._frequency == Frequency.MONTH:
+                date_da = da[(da.time['time.month'] == target_date.month) &
+                             (da.time <= target_date) &
+                             ~da.time.isin(missing_dates)].\
+                    isel(time=slice(0, max_years))
+            elif self._frequency == Frequency.DAY:
+                # TODO: We're assuming the linear trend as a day-res year long application
+                # TODO: I've hacked a leap year in for the mo, but this should be using loc, a simplified clause and isel
+                #  such as by starting with date_da = da.loc[target_date:]
+                date_da = da[(da.time['time.month'] == target_date.month) &
+                             ((da.time['time.day'] == target_date.day) |
+                              (da.time["time.day"] == target_date.day - 1)) &
+                             (da.time <= target_date) &
+                             ~da.time.isin(missing_dates)].\
+                    isel(time=slice(0, max_years))
             return date_da
 
         for forecast_date in sorted(trend_dates, reverse=True):
@@ -439,10 +445,17 @@ class NormalisingChannelProcessor(Processor):
                     # We don't do this (https://github.com/tom-andersson/icenet2/
                     # blob/4ca0f1300fbd82335d8bb000c85b1e71855630fa/icenet2/utils.py#L520) any more
 
+                    if var_name in self._no_normalise:
+                        logging.info("No normalisation for {}".format(var_name))
+                    else:
+                        logging.info("Normalising {}".format(var_name))
+                        da = self._normalise(var_name, da)
+
+                    da = self.post_normalisation(var_name, da)
+
+                    # TODO: a nicer way of implementing derived channels would make sense
                     if self._linear_trends is not None:
                         if var_name in self._linear_trends and var_suffix == "abs":
-                            # TODO: verify, this used to be da = , but we should not be
-                            #  overwriting the abs da with linear trend da
                             ref_da = None
 
                             if self._refdir is not None:
@@ -460,14 +473,6 @@ class NormalisingChannelProcessor(Processor):
                             raise NotImplementedError(
                                 "You've asked for linear trend "
                                 "without an  absolute value var: {}".format(var_name))
-
-                    if var_name in self._no_normalise:
-                        logging.info("No normalisation for {}".format(var_name))
-                    else:
-                        logging.info("Normalising {}".format(var_name))
-                        da = self._normalise(var_name, da)
-
-                    da = self.post_normalisation(var_name, da)
 
                     self.save_processed_file(
                         "{}_{}".format(var_name, var_suffix),
