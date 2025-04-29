@@ -228,31 +228,6 @@ def reproject_dataset(
         ).mean()
 
     # TODO: Storing grid mapping attributes in the dataset to be CF Compliant
-    # This is more trouble than its worth currently - need to map the different
-    # projections which expect different attributes.
-    # target_crs_dict = target_crs.to_dict()
-    # semi_major_axis=target_crs.ellipsoid.semi_major_metre
-    # semi_minor_axis=target_crs.ellipsoid.semi_minor_metre
-    # latitude_of_projection_origin=target_crs_dict.get('lat_0', 0)
-    # longitude_of_projection_origin=target_crs_dict.get('lon_0', 0)
-    # false_easting=target_crs_dict.get('x_0', 0)
-    # false_northing=target_crs_dict.get('y_0', 0)
-
-    # grid_mapping_attrs = {
-    #     "grid_mapping_name": "lambert_azimuthal_equal_area",
-    #     "longitude_of_projection_origin": longitude_of_projection_origin,
-    #     "latitude_of_projection_origin": latitude_of_projection_origin,
-    #     "false_easting": false_easting,
-    #     "false_northing": false_northing,
-    #     "semi_major_axis": semi_major_axis,
-    #     "semi_minor_axis": semi_minor_axis,
-    # }
-
-    # # Add a new variable for the grid_mapping to the dataset
-    # ds_reprojected["projection"] = xr.DataArray(np.zeros(()), attrs=grid_mapping_attrs)
-
-    # # Link the 'data' variable to the 'projection' variable (through grid_mapping attribute)
-    # ds_reprojected["tas"].attrs["grid_mapping"] = "projection"
 
     return ds_reprojected
 
@@ -301,11 +276,6 @@ def reproject_dataset_ease2(
     # Create an affine transform for the target grid.
     # from_origin expects (upper-left x, upper-left y, x resolution, y resolution)
     target_transform = from_origin(x0, y0, cell_size, cell_size)
-
-    # # Define the target affine transform for EASE-Grid 2.0 (Northern Hemisphere)
-    # # Here, the pixel size is 25,000 m, with the top-left corner at (-9000000, 9000000)
-    # target_transform = Affine(25000, 0, -9000000,
-    #                           0, -25000, 9000000)
 
     ds_reprojected = reproject_dataset(
         *args, target_transform=target_transform, **kwargs
