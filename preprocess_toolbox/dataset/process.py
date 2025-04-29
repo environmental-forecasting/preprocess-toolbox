@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import iris
@@ -12,7 +13,6 @@ import xarray as xr
 
 from affine import Affine
 from download_toolbox.interface import DatasetConfig
-from joblib import Parallel, delayed
 from rasterio.enums import Resampling
 from rasterio.transform import from_origin
 from preprocess_toolbox.cli import parse_shape
@@ -284,6 +284,33 @@ def reproject_dataset_ease2(
     return ds_reprojected
 
 
+def reproject_file(datafile, ease2, **kwargs):
+    try:
+        (datafile_path, datafile_name) = os.path.split(datafile)
+        reproject_source_name = f"_reproject_{datafile_name}"
+        reproject_datafile = Path(datafile_path) / reproject_source_name
+        os.rename(datafile, reproject_datafile)
+
+        logging.debug(f"Reprojecting {reproject_datafile}")
+
+        if ease2:
+            ds_reprojected = reproject_dataset_ease2(
+                netcdf_file=reproject_datafile, **kwargs
+            )
+        else:
+            ds_reprojected = reproject_dataset(netcdf_file=reproject_datafile, **kwargs)
+
+        logging.debug(f"Saving reprojected data to {datafile}... ")
+        ds_reprojected.to_netcdf(datafile)
+    except Exception as e:
+        print(f"Error reprojecting {datafile}: {e}")
+        raise
+    finally:
+        # Ensure temp file is deleted
+        if os.path.exists(reproject_datafile):
+            os.remove(reproject_datafile)
+
+
 def reproject_datasets_from_config(
     process_config: DatasetConfig, ease2=False, workers: int=1, **kwargs
 ):
@@ -293,43 +320,13 @@ def reproject_datasets_from_config(
         _ for var_files in process_config.var_files.values() for _ in var_files
     ]
 
-    def reproject_file(datafile):
-        try:
-            (datafile_path, datafile_name) = os.path.split(datafile)
-            reproject_source_name = f"_reproject_{datafile_name}"
-            reproject_datafile = Path(datafile_path) / reproject_source_name
-            os.rename(datafile, reproject_datafile)
-
-            logging.debug(f"Reprojecting {reproject_datafile}")
-
-            if ease2:
-                ds_reprojected = reproject_dataset_ease2(
-                    netcdf_file=reproject_datafile, **kwargs
-                )
-            else:
-                ds_reprojected = reproject_dataset(netcdf_file=reproject_datafile, **kwargs)
-
-            logging.debug(f"Saving reprojected data to {datafile}... ")
-            ds_reprojected.to_netcdf(datafile)
-        except Exception as e:
-            print(f"Error reprojecting {datafile}: {e}")
-            raise
-        finally:
-            # Ensure temp file is deleted
-            if os.path.exists(reproject_datafile):
-                os.remove(reproject_datafile)
-
-    # Parallel(n_jobs=workers, backend="threading", verbose=13)(
-    #     delayed(reproject_file)(datafile) for datafile in datafiles
-    # )
-
     logging.info(f"{len(datafiles)} files to reproject")
     if workers > 1:
         logging.info(f"Reprojecting using {workers} workers")
-        # _ = thread_map(reproject_file, datafiles, max_workers=workers)
-        Parallel(n_jobs=workers, backend="loky", timeout=9999, verbose=51)(
-            delayed(reproject_file)(datafile) for datafile in datafiles
-        )
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            futures = [executor.submit(reproject_file, datafile, ease2, **kwargs) for datafile in datafiles]
+
+        _ = [future.result() for future in futures]
     else:
         logging.info("Reprojecting using one worker")
         for datafile in datafiles:

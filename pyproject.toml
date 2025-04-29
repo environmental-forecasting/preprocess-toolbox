@@ -16,7 +16,6 @@ maintainers = [
 license = { file = "LICENSE" }
 dependencies = [
     "download-toolbox",
-    "joblib",
     "orjson",
     "pip>=23.3",
     "rioxarray",
