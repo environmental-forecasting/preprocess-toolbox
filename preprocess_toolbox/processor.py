@@ -243,12 +243,15 @@ class NormalisingChannelProcessor(Processor):
                 additional_lag_dates, dropped_lag_dates = get_extension_dates(ds_config, dates, self._lag_time, reverse=True)
                 dates += additional_lag_dates
                 drop_dates[split] += dropped_lag_dates
-
+                logging.info("Lag added {} dates for {} category: {} - {}".
+                             format(len(dates), split, min(dates), max(dates)))
             if self._lead_time > 0:
                 logging.info("Including lead of {} {}s".format(self._lead_time, ds_config.frequency.attribute))
                 additional_lead_dates, dropped_lead_dates = get_extension_dates(ds_config, dates, self._lead_time)
                 dates += additional_lead_dates
                 drop_dates[split] += dropped_lead_dates
+                logging.info("Lead added {} dates for {} category: {} - {}".
+                             format(len(dates), split, min(dates), max(dates)))
 
             split_dates_required[split] = sorted([_ for _ in dates if _ not in drop_dates[split]])
 

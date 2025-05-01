@@ -17,9 +17,11 @@ license = { file = "LICENSE" }
 dependencies = [
     "download-toolbox",
     "orjson",
-	"pip>=23.3",
-	"scitools-iris",
-	"wheel>=0.38.1",
+    "pip>=23.3",
+    "rioxarray",
+    "scitools-iris",
+    "wheel>=0.38.1",
+    "xarray[io]",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -39,6 +41,7 @@ classifiers = [
 preprocess_missing_spatial = "preprocess_toolbox.dataset.cli:missing_spatial"
 preprocess_missing_time = "preprocess_toolbox.dataset.cli:missing_time"
 preprocess_regrid = "preprocess_toolbox.dataset.cli:regrid"
+preprocess_reproject = "preprocess_toolbox.dataset.cli:reproject"
 preprocess_rotate = "preprocess_toolbox.dataset.cli:rotate"
 
 #
