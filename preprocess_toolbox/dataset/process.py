@@ -181,10 +181,22 @@ def reproject_dataset(
     target_transform: Affine | None = None,
     coarsen: int = 1,
     interpolate_nans: bool = False,
-):
+) -> xr.Dataset:
     """
-    Reprojects a source dataset from source_crs to target_crs using
-    rioxarray.
+    Reprojects a source dataset from a source CRS to a target CRS using rioxarray.
+
+    Args:
+        netcdf_file: Path to the NetCDF file or an xarray Dataset/DataArray.
+        source_crs (optional): Source coordinate reference system (CRS). Defaults to "EPSG:4326".
+        target_crs (optional): Target coordinate reference system (CRS). Defaults to "EPSG:6931".
+        resolution (optional): Resolution of the target grid. Defaults to None.
+        shape (optional): Shape of the target grid. Defaults to None.
+        target_transform (optional): Affine transform for the target grid. Defaults to None.
+        coarsen (optional): Factor by which to coarsen the dataset. Defaults to 1.
+        interpolate_nans (optional): Whether to interpolate missing values (NaNs). Defaults to False.
+
+    Returns:
+        xarray.Dataset: Reprojected dataset.
     """
     if isinstance(netcdf_file, xr.Dataset) or isinstance(netcdf_file, xr.DataArray):
         ds = netcdf_file
@@ -235,9 +247,22 @@ def reproject_dataset(
 def reproject_dataset_ease2(
     *args,
     **kwargs,
-):
-    """Reproject a dataset to EASE-Grid 2.0 standard"""
+) -> xr.Dataset:
+    """
+    Reprojects a dataset to the EASE-Grid 2.0 standard.
 
+    Args:
+        *args: Positional arguments to pass to `reproject_dataset`.
+        **kwargs: Keyword arguments to pass to `reproject_dataset`. Must include:
+            - target_crs (str): Target CRS, must be "EPSG:6931" or "EPSG:6932".
+            - shape (tuple[int, int], optional): Shape of the target grid. Defaults to (720, 720).
+
+    Raises:
+        ValueError: If `target_crs` or `shape` does not match the EASE-Grid 2.0 standard.
+
+    Returns:
+        Reprojected dataset.
+    """
     target_crs = kwargs["target_crs"]
     if target_crs is None:
         raise ValueError("target_crs must be specified")
@@ -284,7 +309,18 @@ def reproject_dataset_ease2(
     return ds_reprojected
 
 
-def reproject_file(datafile, ease2, **kwargs):
+def reproject_file(datafile: str, ease2: bool = False, **kwargs) -> None:
+    """
+    Reprojects a single NetCDF file.
+
+    Args:
+        datafile (str): Path to the NetCDF file to reproject.
+        ease2 (optional): Whether to use EASE-Grid 2.0 standard for reprojection. Defaults to False.
+        **kwargs: Additional arguments to pass to `reproject_dataset` or `reproject_dataset_ease2`.
+
+    Raises:
+        Exception: If an error occurs during reprojection.
+    """
     try:
         (datafile_path, datafile_name) = os.path.split(datafile)
         reproject_source_name = f"_reproject_{datafile_name}"
@@ -313,7 +349,16 @@ def reproject_file(datafile, ease2, **kwargs):
 
 def reproject_datasets_from_config(
     process_config: DatasetConfig, ease2=False, workers: int=1, **kwargs
-):
+) -> None:
+    """
+    Reprojects multiple datasets from input config file.
+
+    Args:
+        process_config: Configuration object containing dataset file paths.
+        ease2 (optional): Whether to use EASE-Grid 2.0 standard for reprojection. Defaults to False.
+        workers (optional): Number of parallel workers to use. Defaults to 1.
+        **kwargs: Additional arguments to pass to `reproject_file`.
+    """
     logging.info("Reprojecting dataset")
 
     datafiles = [
