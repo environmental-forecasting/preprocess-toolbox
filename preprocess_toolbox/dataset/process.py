@@ -375,6 +375,6 @@ def reproject_datasets_from_config(
     else:
         logging.info("Reprojecting using one worker")
         for datafile in datafiles:
-            reproject_file(datafile)
+            reproject_file(datafile, ease2, **kwargs)
 
     logging.info("Reprojection completed")
