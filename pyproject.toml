@@ -7,15 +7,13 @@ name = "preprocess_toolbox"
 dynamic = ["version", "readme"]
 requires-python = ">=3.8"
 description = "A preprocessing toolbox for converting datasets into assets ready for ML based workloads"
-authors = [
-  {name = "James Byrne", email = "digitalinnovation@bas.ac.uk"}
-]
+authors = [{name = "British Antarctic Survey / Alan Turing Institute"}]
 maintainers = [
   {name = "James Byrne", email = "digitalinnovation@bas.ac.uk"}
 ]
 license = { file = "LICENSE" }
 dependencies = [
-    "download-toolbox",
+    "download-toolbox>=0.0.5",
     "orjson",
     "pip>=23.3",
     "rioxarray",
@@ -57,30 +55,32 @@ preprocess_add_processed = "preprocess_toolbox.loader.cli:add_processed"
 
 [project.optional-dependencies]
 dev = [
-    "watchdog",
-    "flake8",
-    "tox",
-    "coverage",
-    "twine",
-    "pytest",
-    "black",
-    "build",
-    "importlib_metadata",
-    "pre-commit",
+  "watchdog",
+  "flake8",
+  "tox",
+  "coverage",
+  "twine",
+  "pytest",
+  "black",
+  "build",
+  "importlib_metadata",
+  "pre-commit",
 ]
 docs = [
-  "jinja2",
-  "Sphinx",
-  "myst_parser"
+  "mkdocs",
+  "mkdocstrings[python]",
+  "markdown-include",
+  "mkdocs-material"
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["preprocess_toolbox*"]
+exclude = ["preprocess_toolbox.tests*"]
 
 [project.urls]
 bugs = "https://github.com/environmental-forecasting/preprocess_toolbox/issues"
-changelog = "https://github.com/environmental-forecasting/preprocess_toolbox/blob/master/changelog.md"
 homepage = "https://github.com/environmental-forecasting/preprocess_toolbox"
-
-[tool.setuptools]
-py-modules = ["preprocess_toolbox"]
 
 [tool.setuptools.dynamic]
 version = {attr = "preprocess_toolbox.__version__"}
