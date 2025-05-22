@@ -160,7 +160,7 @@ def process_split_args(args: object,
     return splits
 
 
-def parse_shape(value: str) -> tuple[int, int]:
+def parse_shape(value: str) -> tuple:
     """
     Parse a shape argument into a tuple of integers.
 

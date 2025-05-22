@@ -173,14 +173,14 @@ def rotate_dataset(ref_file: os.PathLike,
 
 
 def reproject_dataset(
-    netcdf_file: str,
-    source_crs: str | None = None,
-    target_crs: str | None = None,
-    resolution: float | tuple[float, float] | None = None,
-    shape: str | int | tuple[int, int] | None = None,
-    target_transform: Affine | None = None,
-    coarsen: int = 1,
-    interpolate_nans: bool = False,
+    netcdf_file,
+    source_crs = None,
+    target_crs = None,
+    resolution = None,
+    shape = None,
+    target_transform = None,
+    coarsen = 1,
+    interpolate_nans = False,
 ) -> xr.Dataset:
     """
     Reprojects a source dataset from a source CRS to a target CRS using rioxarray.
