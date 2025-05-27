@@ -375,7 +375,8 @@ class NormalisingChannelProcessor(Processor):
                                                 for split, var_files in self.source_files.items()
                                                 for vn, files in var_files.items()
                                                 for file in files
-                                                if var_name == vn])))
+                                                if var_name == vn
+                                                and os.path.exists(file)])))
 
                 if len(source_files) > 0:
                     logging.info("Opening {} files for {}".format(len(source_files), var_name))
