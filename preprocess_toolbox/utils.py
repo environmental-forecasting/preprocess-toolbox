@@ -6,8 +6,9 @@ import os
 from dateutil.relativedelta import relativedelta
 
 import orjson
+import pandas as pd
 
-from download_toolbox.interface import DatasetConfig
+from download_toolbox.interface import DatasetConfig, Frequency
 
 
 def get_config(config_path: os.PathLike):
@@ -43,6 +44,9 @@ def get_extension_dates(ds_config: DatasetConfig,
             attrs = {"{}s".format(ds_config.frequency.attribute): time + 1}
             op = operator.sub if reverse else operator.add
             extended_date = op(date, relativedelta(**attrs))
+
+            if ds_config.frequency.attribute == Frequency.MONTH:
+                extended_date = extended_date + pd.offsets.MonthEnd(0)
 
             if extended_date not in dates:
                 if all([os.path.exists(ds_config.var_filepath(var_config, [extended_date]))
