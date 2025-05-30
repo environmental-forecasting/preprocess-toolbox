@@ -45,7 +45,7 @@ def get_extension_dates(ds_config: DatasetConfig,
             op = operator.sub if reverse else operator.add
             extended_date = op(date, relativedelta(**attrs))
 
-            if ds_config.frequency.attribute == Frequency.MONTH:
+            if ds_config.frequency == Frequency.MONTH:
                 extended_date = extended_date + pd.offsets.MonthEnd(0)
 
             if extended_date not in dates:
@@ -58,6 +58,7 @@ def get_extension_dates(ds_config: DatasetConfig,
                     logging.warning("{} will be dropped due to missing data {}".
                                     format(date, extended_date))
                     dropped_dates.append(date)
+                    break
 
     return sorted(list(set(additional_dates))), sorted(list(set(dropped_dates)))
 
