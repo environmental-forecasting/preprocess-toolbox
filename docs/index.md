@@ -4,8 +4,4 @@ Check out the [usage](usage.md) section for further information, including how t
 
 Check out the [API](preprocess_toolbox/base.md) if you're keen to go deep.
 
-!!! note
-
-    This project is under active development.
-
 {!README.md!}
