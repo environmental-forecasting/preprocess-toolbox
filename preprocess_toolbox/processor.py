@@ -388,7 +388,8 @@ class NormalisingChannelProcessor(Processor):
                         combine="nested",
                         coords="minimal",
                         compat="override",
-                        parallel=self._parallel)
+                        parallel=self._parallel,
+                        lock=False)
                     da = getattr(ds, var_name)
                     da = da.astype(self.dtype)
 
