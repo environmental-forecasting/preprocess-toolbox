@@ -47,20 +47,7 @@ This library doesn't have knowledge of those datasets, it forms the basis for pr
 
 ## Limitations
 
-There are some major limitations to this as a general purpose tool, these will hopefully be dealt with in time! I'm raising issues as I go
-
-**This is currently very heavy development functionality, but the following commands already work**:
-
-* preprocess_missing_spatial - poorly at present due to missing mask backref implementation
-* preprocess_missing_time
-* preprocess_regrid
-* preprocess_rotate
-* preprocess_dataset
-* preprocess_loader_init
-* preprocess_add_mask
-* preprocess_add_channel
-
-Other stubs probably don't work, unless I forgot to update these docs!
+**This is currently active development, but the commands work to most degrees.**
 
 ## Contributing
 
