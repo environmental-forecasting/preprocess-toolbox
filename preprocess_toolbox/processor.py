@@ -240,7 +240,8 @@ class NormalisingChannelProcessor(Processor):
             # Calculating lead and lag dates that aren't already accounted for in splits
             if self._lag_time > 0:
                 logging.info("Including lag of {} {}s".format(self._lag_time, ds_config.frequency.attribute))
-                additional_lag_dates, dropped_lag_dates = get_extension_dates(ds_config, dates, self._lag_time, reverse=True)
+                additional_lag_dates, dropped_lag_dates = get_extension_dates(ds_config, dates, self._lag_time + 1,
+                                                                              start_step=1, reverse=True)
                 dates += additional_lag_dates
                 drop_dates[split] += dropped_lag_dates
                 logging.info("Lag added {} dates for {} category: {} - {}".

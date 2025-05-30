@@ -36,17 +36,18 @@ def get_config_filename(args: argparse.Namespace, prefix: str = "loader"):
 def get_extension_dates(ds_config: DatasetConfig,
                         dates: list,
                         num_steps: int,
-                        reverse=False):
+                        start_step: int = 0,
+                        reverse: bool = False):
     additional_dates, dropped_dates = [], []
 
     for date in dates:
-        for time in range(num_steps):
-            attrs = {"{}s".format(ds_config.frequency.attribute): time + 1}
+        for time in range(start_step, num_steps):
+            attrs = {"{}s".format(ds_config.frequency.attribute): time}
             op = operator.sub if reverse else operator.add
             extended_date = op(date, relativedelta(**attrs))
 
             if ds_config.frequency == Frequency.MONTH:
-                extended_date = extended_date + pd.offsets.MonthEnd(0)
+                extended_date = pd.to_datetime(extended_date + pd.offsets.MonthEnd(0)).date()
 
             if extended_date not in dates:
                 if all([os.path.exists(ds_config.var_filepath(var_config, [extended_date]))
