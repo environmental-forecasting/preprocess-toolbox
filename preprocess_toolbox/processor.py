@@ -261,7 +261,6 @@ class NormalisingChannelProcessor(Processor):
 
             for var_name, var_files in self._source_files[split].items():
                 logging.info("Got {} files for {}:{}".format(len(var_files), split, var_name))
-        logging.debug(pformat(self._source_files))
 
     def _normalise_array_mean(self, var_name: str, da: object, denormalise: bool=False):
         """
@@ -341,7 +340,6 @@ class NormalisingChannelProcessor(Processor):
         elif self.norm_split_dates:
             logging.debug("Generating norm-scaling min-max from {} training "
                           "dates".format(len(self.norm_split_dates)))
-
             norm_samples = da.sel(time=self.norm_split_dates).data
             norm_samples = norm_samples.ravel()
 
@@ -380,19 +378,15 @@ class NormalisingChannelProcessor(Processor):
 
                 if len(source_files) > 0:
                     logging.info("Opening {} files for {}".format(len(source_files), var_name))
+                    logging.debug("Files to be opened:\n{}".format(pformat(source_files)))
 
                     # In the old IceNet library there was dubiousness about the source of the
                     # data so this was harder. Now we work with whatever we get from download-toolbox
                     ds = xr.open_mfdataset(
                         source_files,
-                        # Solves issue with inheriting files without
-                        # time dimension (only having coordinate)
                         combine="nested",
-                        concat_dim="time",
                         coords="minimal",
                         compat="override",
-                        # TODO: review this, but if lat-lon is in the file, it's signalling bigger issues
-                        # drop_variables=("lat", "lon"),
                         parallel=self._parallel)
                     da = getattr(ds, var_name)
                     da = da.astype(self.dtype)
@@ -400,7 +394,6 @@ class NormalisingChannelProcessor(Processor):
                     # FIXME: we should ideally store train dates against the
                     #  normalisation and climatology, to ensure recalculation on
                     #  reprocess. All this need be is in the path, to be honest
-
                     if var_suffix == "anom":
                         if len(self._anom_clim_splits) < 1 and self._refdir is None:
                             raise ProcessingError("You must provide a list of splits via "
@@ -589,7 +582,6 @@ class NormalisingChannelProcessor(Processor):
 
     @property
     def norm_split_dates(self):
-        # TODO: functools.cached_property, though slightly odd behaviour re. write-ability
         return [date
                 for clim_split in self._normalisation_splits
                 for date in self._splits[clim_split]]
