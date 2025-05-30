@@ -4,22 +4,8 @@ theme:
   highlightjs: true
 nav:
   - Home: 'index.md'
+  - 'commands.md'
   - 'usage.md'
-  - API:
-    - preprocess.dataset:
-        - "preprocess_toolbox/dataset/cli.md"
-        - "preprocess_toolbox/dataset/process.md"
-        - "preprocess_toolbox/dataset/spatial.md"
-        - "preprocess_toolbox/dataset/time.md"
-    - preprocess.loader:
-        - "preprocess_toolbox/loader/cli.md"
-        - "preprocess_toolbox/loader/utils.md"
-    - "preprocess_toolbox/base.md"
-    - "preprocess_toolbox/interface.md"
-    - "preprocess_toolbox/models.md"
-    - "preprocess_toolbox/processor.md"
-    - "preprocess_toolbox/utils.md"
-    - "preprocess_toolbox/cli.md"
   - GitHub: 'https://github.com/environmental-forecasting/preprocess-toolbox'
 plugins:
   - search
