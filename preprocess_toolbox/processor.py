@@ -95,8 +95,16 @@ class NormalisingChannelProcessor(Processor):
         self._normalisation_splits = [] if normalisation_splits is None else normalisation_splits
         self._parallel = parallel_opens
         self._refdir = ref_procdir
+
+        ##
+        # Split dates -
+        #
+
         # TODO: splits -> { dates, sources }, but currently sources are separate...
         self._splits = splits
+        self._valid_split_dates = splits
+        # TODO: add self._dropped_dates based on DATA
+
         self._source_files = dict()
 
         if init_source:
@@ -223,16 +231,17 @@ class NormalisingChannelProcessor(Processor):
         :return:
         """
 
-        split_dates_required = dict()
+        # TODO: distracted, but this needs to be better written
         drop_dates = dict()
+        all_dates = dict()
 
         for split in self._splits.keys():
-            dates = sorted(self._splits[split])
+            all_dates[split] = sorted(self._splits[split])
             drop_dates[split] = list()
 
-            if dates:
+            if all_dates[split]:
                 logging.info("Processing {} dates for {} category: {} - {}".
-                             format(len(dates), split, min(dates), max(dates)))
+                             format(len(all_dates[split]), split, min(all_dates[split]), max(all_dates[split])))
             else:
                 logging.info("No {} dates for this processor".format(split))
                 continue
@@ -240,24 +249,24 @@ class NormalisingChannelProcessor(Processor):
             # Calculating lead and lag dates that aren't already accounted for in splits
             if self._lag_time > 0:
                 logging.info("Including lag of {} {}s".format(self._lag_time, ds_config.frequency.attribute))
-                additional_lag_dates, dropped_lag_dates = get_extension_dates(ds_config, dates, self._lag_time + 1,
+                additional_lag_dates, dropped_lag_dates = get_extension_dates(ds_config, all_dates[split], self._lag_time + 2,
                                                                               start_step=1, reverse=True)
-                dates += additional_lag_dates
+                all_dates[split] += additional_lag_dates
                 drop_dates[split] += dropped_lag_dates
                 logging.info("Lag added {} dates for {} category: {} - {}".
-                             format(len(dates), split, min(dates), max(dates)))
+                             format(len(all_dates[split]), split, min(all_dates[split]), max(all_dates[split])))
             if self._lead_time > 0:
                 logging.info("Including lead of {} {}s".format(self._lead_time, ds_config.frequency.attribute))
-                additional_lead_dates, dropped_lead_dates = get_extension_dates(ds_config, dates, self._lead_time)
-                dates += additional_lead_dates
+                additional_lead_dates, dropped_lead_dates = get_extension_dates(ds_config, all_dates[split], self._lead_time)
+                all_dates[split] += additional_lead_dates
                 drop_dates[split] += dropped_lead_dates
                 logging.info("Lead added {} dates for {} category: {} - {}".
-                             format(len(dates), split, min(dates), max(dates)))
+                             format(len(all_dates[split]), split, min(all_dates[split]), max(all_dates[split])))
 
-            split_dates_required[split] = sorted([_ for _ in dates if _ not in drop_dates[split]])
+            self._valid_split_dates[split] = sorted([_ for _ in all_dates[split] if _ not in drop_dates[split]])
 
         for split in self._splits.keys():
-            self._source_files[split] = {var_config.name: ds_config.var_filepaths(var_config, split_dates_required[split])
+            self._source_files[split] = {var_config.name: ds_config.var_filepaths(var_config, all_dates[split])
                                          for var_config in ds_config.variables}
 
             for var_name, var_files in self._source_files[split].items():
@@ -385,9 +394,6 @@ class NormalisingChannelProcessor(Processor):
                     # data so this was harder. Now we work with whatever we get from download-toolbox
                     ds = xr.open_mfdataset(
                         source_files,
-                        combine="nested",
-                        coords="minimal",
-                        compat="override",
                         parallel=self._parallel,
                         lock=False)
                     da = getattr(ds, var_name)
@@ -503,7 +509,7 @@ class NormalisingChannelProcessor(Processor):
             "path": self.path,
             "processed_files": self._processed_files,
             "source_files": self._source_files,
-            "splits": self.splits,
+            "splits": self._valid_split_dates,
         }
 
     @staticmethod
