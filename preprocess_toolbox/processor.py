@@ -102,7 +102,7 @@ class NormalisingChannelProcessor(Processor):
 
         # TODO: splits -> { dates, sources }, but currently sources are separate...
         self._splits = splits
-        self._valid_split_dates = splits
+        self._dropped_split_dates = {}
         # TODO: add self._dropped_dates based on DATA
 
         self._source_files = dict()
@@ -231,7 +231,6 @@ class NormalisingChannelProcessor(Processor):
         :return:
         """
 
-        # TODO: distracted, but this needs to be better written
         drop_dates = dict()
         all_dates = dict()
 
@@ -247,9 +246,9 @@ class NormalisingChannelProcessor(Processor):
                 continue
 
             # Calculating lead and lag dates that aren't already accounted for in splits
-            if self._lag_time > 0:
+            if self._lag_time >= 0:
                 logging.info("Including lag of {} {}s".format(self._lag_time, ds_config.frequency.attribute))
-                additional_lag_dates, dropped_lag_dates = get_extension_dates(ds_config, all_dates[split], self._lag_time + 2,
+                additional_lag_dates, dropped_lag_dates = get_extension_dates(ds_config, all_dates[split], self._lag_time + 1,
                                                                               start_step=1, reverse=True)
                 all_dates[split] += additional_lag_dates
                 drop_dates[split] += dropped_lag_dates
@@ -263,7 +262,8 @@ class NormalisingChannelProcessor(Processor):
                 logging.info("Lead added {} dates for {} category: {} - {}".
                              format(len(all_dates[split]), split, min(all_dates[split]), max(all_dates[split])))
 
-            self._valid_split_dates[split] = sorted([_ for _ in all_dates[split] if _ not in drop_dates[split]])
+            self._dropped_split_dates[split] = sorted(drop_dates[split])
+            all_dates[split] = sorted([_ for _ in all_dates[split] if _ not in drop_dates[split]])
 
         for split in self._splits.keys():
             self._source_files[split] = {var_config.name: ds_config.var_filepaths(var_config, all_dates[split])
@@ -388,7 +388,6 @@ class NormalisingChannelProcessor(Processor):
 
                 if len(source_files) > 0:
                     logging.info("Opening {} files for {}".format(len(source_files), var_name))
-                    logging.debug("Files to be opened:\n{}".format(pformat(source_files)))
 
                     # In the old IceNet library there was dubiousness about the source of the
                     # data so this was harder. Now we work with whatever we get from download-toolbox
@@ -398,6 +397,7 @@ class NormalisingChannelProcessor(Processor):
                         lock=False)
                     da = getattr(ds, var_name)
                     da = da.astype(self.dtype)
+                    logging.debug("Files to be opened: {}".format(da.dims))
 
                     # FIXME: we should ideally store train dates against the
                     #  normalisation and climatology, to ensure recalculation on
@@ -509,7 +509,9 @@ class NormalisingChannelProcessor(Processor):
             "path": self.path,
             "processed_files": self._processed_files,
             "source_files": self._source_files,
-            "splits": self._valid_split_dates,
+            "splits": {split: [
+                date for date in dates if date not in self._dropped_split_dates[split]
+            ] for split, dates in self._splits.items()},
         }
 
     @staticmethod
