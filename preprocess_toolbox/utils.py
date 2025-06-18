@@ -6,8 +6,10 @@ import os
 from dateutil.relativedelta import relativedelta
 
 import orjson
+import pandas as pd
+import xarray as xr
 
-from download_toolbox.interface import DatasetConfig
+from download_toolbox.interface import DatasetConfig, Frequency
 
 
 def get_config(config_path: os.PathLike):
@@ -35,25 +37,43 @@ def get_config_filename(args: argparse.Namespace, prefix: str = "loader"):
 def get_extension_dates(ds_config: DatasetConfig,
                         dates: list,
                         num_steps: int,
-                        reverse=False):
+                        start_step: int = 0,
+                        reverse: bool = False):
     additional_dates, dropped_dates = [], []
 
     for date in dates:
-        for time in range(num_steps):
-            attrs = {"{}s".format(ds_config.frequency.attribute): time + 1}
+        for time in range(start_step, num_steps):
+            attrs = {"{}s".format(ds_config.frequency.attribute): time}
             op = operator.sub if reverse else operator.add
             extended_date = op(date, relativedelta(**attrs))
 
-            if extended_date not in dates:
-                if all([os.path.exists(ds_config.var_filepath(var_config, [extended_date]))
-                        for var_config in ds_config.variables]):
-                    # We only add these dates into the mix if all necessary files exist
-                    additional_dates.append(extended_date)
+            if ds_config.frequency == Frequency.MONTH:
+                extended_date = pd.to_datetime(extended_date + pd.offsets.MonthEnd(0)).date()
+
+            # Check we don't know we have data, and also ignore previous occurrences
+            if extended_date not in dates and extended_date not in additional_dates:
+                extended_date_var_files = [ds_config.var_filepath(var_config, [extended_date])
+                                           for var_config in ds_config.variables]
+                if all([os.path.exists(df) for df in extended_date_var_files]):
+                    # The above will catch those items that fall outside the file output boundary, but not missing
+                    # dates within ALL files. This next clause is more expensive, but necessary to catch everything!
+                    logging.debug("Files exist, double checking whether {} appears in data itself across {} files".
+                                  format(extended_date, len(extended_date_var_files)))
+
+                    # TODO: this won't catch partially available dates where not all files have the date, but some do
+                    if pd.Timestamp(extended_date) in xr.open_mfdataset(extended_date_var_files).time.values:
+                        # We only add these dates into the mix if all necessary files exist
+                        additional_dates.append(extended_date)
+                    else:
+                        logging.warning("Nope, {} not in data itself so dropping {}".format(extended_date, date))
+                        dropped_dates.append(date)
+                        break
                 else:
                     # Otherwise, warn that the lag data means this is being dropped
                     logging.warning("{} will be dropped due to missing data {}".
                                     format(date, extended_date))
                     dropped_dates.append(date)
+                    break
 
     return sorted(list(set(additional_dates))), sorted(list(set(dropped_dates)))
 

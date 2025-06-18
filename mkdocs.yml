@@ -9,16 +9,40 @@ nav:
   - GitHub: 'https://github.com/environmental-forecasting/preprocess-toolbox'
 plugins:
   - search
+  # Enables automatically generating authors from git repo, see acknowledgements.md
+  - git-authors
+  # Automatically generates API section from docstrings
+  - mkdocs-autoapi:
+      autoapi_add_nav_entry: API
+      autoapi_ignore:
+        - setup.py
+  - autorefs:
+      resolve_closest: true
   - mkdocstrings:
       handlers:
         python:
+          paths:
+            - .
           options:
-            docstring_style: sphinx
+            show_submodules: true
+            docstring_style: google
             heading_level: 3
 markdown_extensions:
   - markdown_include.include:
       base_path: .
   - admonition
+  # Enables code block highlighting
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.blocks.caption
+  - pymdownx.tabbed:
+      alternate_style: true
+copyright: Copyright &copy; 2025 British Antarctic Survey / Alan Turing Institute
 
 # Include extra CSS to make some style adjustments
 extra_css:
