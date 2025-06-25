@@ -108,5 +108,8 @@ ENV/
 .vscode/
 .idea/
 
+# vim
+*.swp
+
 /data/
 /preprocess_toolbox/scratches/
