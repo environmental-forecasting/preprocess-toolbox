@@ -110,6 +110,7 @@ ENV/
 
 # vim
 *.swp
+*.swo
 
 /data/
 /preprocess_toolbox/scratches/
