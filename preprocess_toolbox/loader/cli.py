@@ -142,9 +142,16 @@ def get_channel_info_from_processor(cfg_segment: str):
         #   but this library doesn't care or know of it respectively.
         raise RuntimeError("--config-path is invalid for this CLI endpoint, sorry...")
 
+    # Overwrite argparse default for this func if base path not provided
+    base_path = args.destination_path
+    if base_path == "processed_data":
+        base_path = os.path.join(".", "processed")
+
     processor = proc_impl(ds_config,
                           [args.channel_name,],
-                          args.channel_name)
+                          args.channel_name,
+                          base_path=base_path,
+                         )
     processor.process()
     update_config(get_config_filename(args),
                   cfg_segment,

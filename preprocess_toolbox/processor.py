@@ -502,6 +502,7 @@ class NormalisingChannelProcessor(Processor):
 
         return {
             "implementation": "{}:{}".format(self.__module__, self.__class__.__name__),
+            "base_path": self._base_path,
             "anomoly_vars": self._anom_vars,
             "absolute_vars": self.abs_vars,
             "dataset_config": self._dataset_config,
