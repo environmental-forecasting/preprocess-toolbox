@@ -14,7 +14,7 @@ from preprocess_toolbox.utils import get_config
 
 
 def process_dataset():
-    args = (ProcessingArgParser().
+    args = (ProcessingArgParser(base_path="processed").
             add_concurrency().
             add_destination().
             add_implementation().
@@ -24,11 +24,6 @@ def process_dataset():
             add_vars()).parse_args()
     ds_config = get_dataset_config_implementation(args.source)
     splits = process_split_args(args, frequency=ds_config.frequency)
-
-    # Overwrite argparse default for this func if base path not provided
-    base_path = args.destination_path
-    if base_path == "processed_data":
-        base_path = os.path.join(".", "processed")
 
     implementation = NormalisingChannelProcessor \
         if args.implementation is None \
@@ -41,7 +36,7 @@ def process_dataset():
                           anom_clim_splits=args.processing_splits,
                           config_path=args.config,
                           identifier=args.destination_id,
-                          base_path=base_path,
+                          base_path=args.destination_path,
                           # TODO: nomenclature is old here, lag and lead make sense in forecasting, but not in here
                           #  so this mapping should be revised throughout the library - we don't necessarily forecast!
                           lag_time=args.split_head,

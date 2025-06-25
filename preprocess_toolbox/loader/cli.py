@@ -45,12 +45,12 @@ class LoaderArgParser(BaseArgParser):
 
 
 class MetaArgParser(LoaderArgParser):
-    def __init__(self):
+    def __init__(self, base_path="processed_data"):
         super().__init__()
         self.add_argument("ground_truth_dataset")
         self.add_argument("-p", "--destination-path",
                           help="Folder that any output data collections will be put in",
-                          type=str, default="processed_data")
+                          type=str, default=base_path)
 
     def add_channel(self):
         self.add_argument("channel_name")
@@ -129,7 +129,7 @@ def add_processed():
 
 
 def get_channel_info_from_processor(cfg_segment: str):
-    args = (MetaArgParser().
+    args = (MetaArgParser(base_path="processed").
             add_channel().
             parse_args())
 
@@ -142,15 +142,10 @@ def get_channel_info_from_processor(cfg_segment: str):
         #   but this library doesn't care or know of it respectively.
         raise RuntimeError("--config-path is invalid for this CLI endpoint, sorry...")
 
-    # Overwrite argparse default for this func if base path not provided
-    base_path = args.destination_path
-    if base_path == "processed_data":
-        base_path = os.path.join(".", "processed")
-
     processor = proc_impl(ds_config,
                           [args.channel_name,],
                           args.channel_name,
-                          base_path=base_path,
+                          base_path=args.destination_path,
                          )
     processor.process()
     update_config(get_config_filename(args),
