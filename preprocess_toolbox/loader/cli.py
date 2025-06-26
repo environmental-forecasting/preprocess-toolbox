@@ -51,6 +51,9 @@ class MetaArgParser(LoaderArgParser):
         self.add_argument("-p", "--destination-path",
                           help="Folder that any output data collections will be put in",
                           type=str, default=base_path)
+        self.add_argument("-l", "--loader-path",
+                          help="Path to the loader JSON config file to load",
+                          type=str, default=None)
 
     def add_channel(self):
         self.add_argument("channel_name")
@@ -74,6 +77,9 @@ def create():
         channels=dict(),
     )
     destination_path = get_config_filename(args)
+    destination_directory = os.path.dirname(destination_path)
+    if destination_directory:
+        os.makedirs(destination_directory, exist_ok=True)
 
     if not os.path.exists(destination_path):
         with open(destination_path, "w") as fh:
@@ -129,24 +135,31 @@ def add_processed():
 
 
 def get_channel_info_from_processor(cfg_segment: str):
-    args = (MetaArgParser(base_path="processed").
+    args, unknown_args = (MetaArgParser(base_path="processed").
             add_channel().
-            parse_args())
+            parse_known_args())
 
     proc_impl = get_implementation(args.implementation)
     ds_config = get_dataset_config_implementation(args.ground_truth_dataset)
 
     if args.config is not None:
-        # FIXME: args.config contains the location of the dataset config on render, but
-        #   this is not part of this pattern! DS is either ground truth or in derived class,
-        #   but this library doesn't care or know of it respectively.
-        raise RuntimeError("--config-path is invalid for this CLI endpoint, sorry...")
+       # FIXME: args.config contains the location of the dataset config on render, but
+       #   this is not part of this pattern! DS is either ground truth or in derived class,
+       #   but this library doesn't care or know of it respectively.
+       raise RuntimeError("--config-path is invalid for this CLI endpoint, sorry...")
 
-    processor = proc_impl(ds_config,
-                          [args.channel_name,],
-                          args.channel_name,
-                          base_path=args.destination_path,
-                         )
+    impl_args = (
+        ds_config,
+        [
+            args.channel_name,
+        ],
+        args.channel_name,
+    )
+    impl_kwargs = {"base_path": args.destination_path}
+    if unknown_args:
+        impl_kwargs |= unknown_args
+
+    processor = proc_impl(*impl_args, **impl_kwargs)
     processor.process()
     update_config(get_config_filename(args),
                   cfg_segment,

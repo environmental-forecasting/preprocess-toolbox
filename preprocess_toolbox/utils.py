@@ -25,6 +25,13 @@ def get_config_filename(args: argparse.Namespace, prefix: str = "loader"):
     if prefix is not None:
         default_loader_config = "{}.{}".format(prefix, default_loader_config)
 
+    if (
+        "loader_path" in args
+        and args.loader_path is not None
+        and (os.path.isfile(args.loader_path) or not os.path.exists(args.loader_path))
+    ):
+        return args.loader_path
+
     # TODO: this is a bit grim, but to allow different config output paths it's very flexible. refactor
     if args.config is not None and (os.path.isfile(args.config) or not os.path.exists(args.config)):
         logging.warning("{} has been specified, overriding default name {}".format(args.config, args.name))
