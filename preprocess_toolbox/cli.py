@@ -16,13 +16,14 @@ from download_toolbox.interface import Frequency
 class ProcessingArgParser(BaseArgParser):
     def __init__(self,
                  *args,
+                 base_path="processed_data",
                  **kwargs):
         super().__init__(*args, **kwargs)
 
         self.add_argument("source", type=str)
         self.add_argument("-p", "--destination-path",
                           help="Folder that any output data collections will be put in",
-                          type=str, default="processed_data")
+                          type=str, default=base_path)
 
     def add_ref_ds(self):
         self.add_argument("reference", type=str)
