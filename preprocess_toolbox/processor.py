@@ -396,6 +396,7 @@ class NormalisingChannelProcessor(Processor):
                     # data so this was harder. Now we work with whatever we get from download-toolbox
                     ds = xr.open_mfdataset(
                         source_files,
+                        engine="h5netcdf",
                         parallel=self._parallel,
                         lock=False)
                     da = getattr(ds, var_name)
