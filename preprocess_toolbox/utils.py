@@ -68,7 +68,7 @@ def get_extension_dates(ds_config: DatasetConfig,
                                   format(extended_date, len(extended_date_var_files)))
 
                     # TODO: this won't catch partially available dates where not all files have the date, but some do
-                    if pd.Timestamp(extended_date) in xr.open_mfdataset(extended_date_var_files).time.values:
+                    if pd.Timestamp(extended_date) in xr.open_mfdataset(extended_date_var_files, compat="no_conflicts").time.values:
                         # We only add these dates into the mix if all necessary files exist
                         additional_dates.append(extended_date)
                     else:
