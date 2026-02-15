@@ -144,7 +144,7 @@ class Processor(DataCollection):
                      for var_filepaths in self.processed_files[vn].values()]
 
         logging.info("Got {} filenames to open dataset with!".format(len(var_files)))
-        logging.debug(pformat(var_files))
+        # logging.debug(pformat(var_files))
 
         # TODO: where's my parallel mfdataset please!?
         with (dask.config.set(**{'array.slicing.split_large_chunks': True})):

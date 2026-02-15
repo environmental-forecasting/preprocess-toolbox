@@ -95,8 +95,16 @@ class NormalisingChannelProcessor(Processor):
         self._normalisation_splits = [] if normalisation_splits is None else normalisation_splits
         self._parallel = parallel_opens
         self._refdir = ref_procdir
+
+        ##
+        # Split dates -
+        #
+
         # TODO: splits -> { dates, sources }, but currently sources are separate...
         self._splits = splits
+        self._dropped_split_dates = {}
+        # TODO: add self._dropped_dates based on DATA
+
         self._source_files = dict()
 
         if init_source:
@@ -223,45 +231,49 @@ class NormalisingChannelProcessor(Processor):
         :return:
         """
 
-        split_dates_required = dict()
         drop_dates = dict()
+        all_dates = dict()
 
         for split in self._splits.keys():
-            dates = sorted(self._splits[split])
+            all_dates[split] = sorted(self._splits[split])
             drop_dates[split] = list()
 
-            if dates:
+            if all_dates[split]:
                 logging.info("Processing {} dates for {} category: {} - {}".
-                             format(len(dates), split, min(dates), max(dates)))
+                             format(len(all_dates[split]), split, min(all_dates[split]), max(all_dates[split])))
             else:
                 logging.info("No {} dates for this processor".format(split))
                 continue
 
             # Calculating lead and lag dates that aren't already accounted for in splits
-            if self._lag_time > 0:
+            if self._lag_time >= 0:
                 logging.info("Including lag of {} {}s".format(self._lag_time, ds_config.frequency.attribute))
-                additional_lag_dates, dropped_lag_dates = get_extension_dates(ds_config, dates, self._lag_time, reverse=True)
-                dates += additional_lag_dates
+                additional_lag_dates, dropped_lag_dates = get_extension_dates(
+                    ds_config, all_dates[split],
+                    # We offset by two, because -1 is channel one, so we need to account for lag == 1 being -2
+                    self._lag_time + 2,
+                    start_step=1, reverse=True)
+                all_dates[split] += additional_lag_dates
                 drop_dates[split] += dropped_lag_dates
                 logging.info("Lag added {} dates for {} category: {} - {}".
-                             format(len(dates), split, min(dates), max(dates)))
+                             format(len(all_dates[split]), split, min(all_dates[split]), max(all_dates[split])))
             if self._lead_time > 0:
                 logging.info("Including lead of {} {}s".format(self._lead_time, ds_config.frequency.attribute))
-                additional_lead_dates, dropped_lead_dates = get_extension_dates(ds_config, dates, self._lead_time)
-                dates += additional_lead_dates
+                additional_lead_dates, dropped_lead_dates = get_extension_dates(ds_config, all_dates[split], self._lead_time)
+                all_dates[split] += additional_lead_dates
                 drop_dates[split] += dropped_lead_dates
                 logging.info("Lead added {} dates for {} category: {} - {}".
-                             format(len(dates), split, min(dates), max(dates)))
+                             format(len(all_dates[split]), split, min(all_dates[split]), max(all_dates[split])))
 
-            split_dates_required[split] = sorted([_ for _ in dates if _ not in drop_dates[split]])
+            self._dropped_split_dates[split] = sorted(drop_dates[split])
+            all_dates[split] = sorted([_ for _ in all_dates[split] if _ not in drop_dates[split]])
 
         for split in self._splits.keys():
-            self._source_files[split] = {var_config.name: ds_config.var_filepaths(var_config, split_dates_required[split])
+            self._source_files[split] = {var_config.name: ds_config.var_filepaths(var_config, all_dates[split])
                                          for var_config in ds_config.variables}
 
             for var_name, var_files in self._source_files[split].items():
                 logging.info("Got {} files for {}:{}".format(len(var_files), split, var_name))
-        logging.debug(pformat(self._source_files))
 
     def _normalise_array_mean(self, var_name: str, da: object, denormalise: bool=False):
         """
@@ -341,7 +353,6 @@ class NormalisingChannelProcessor(Processor):
         elif self.norm_split_dates:
             logging.debug("Generating norm-scaling min-max from {} training "
                           "dates".format(len(self.norm_split_dates)))
-
             norm_samples = da.sel(time=self.norm_split_dates).data
             norm_samples = norm_samples.ravel()
 
@@ -375,7 +386,8 @@ class NormalisingChannelProcessor(Processor):
                                                 for split, var_files in self.source_files.items()
                                                 for vn, files in var_files.items()
                                                 for file in files
-                                                if var_name == vn])))
+                                                if var_name == vn
+                                                and os.path.exists(file)])))
 
                 if len(source_files) > 0:
                     logging.info("Opening {} files for {}".format(len(source_files), var_name))
@@ -384,22 +396,16 @@ class NormalisingChannelProcessor(Processor):
                     # data so this was harder. Now we work with whatever we get from download-toolbox
                     ds = xr.open_mfdataset(
                         source_files,
-                        # Solves issue with inheriting files without
-                        # time dimension (only having coordinate)
-                        combine="nested",
-                        concat_dim="time",
-                        coords="minimal",
-                        compat="override",
-                        # TODO: review this, but if lat-lon is in the file, it's signalling bigger issues
-                        # drop_variables=("lat", "lon"),
-                        parallel=self._parallel)
+                        engine="h5netcdf",
+                        parallel=self._parallel,
+                        lock=False)
                     da = getattr(ds, var_name)
                     da = da.astype(self.dtype)
+                    logging.debug("Files to be opened: {}".format(da.dims))
 
                     # FIXME: we should ideally store train dates against the
                     #  normalisation and climatology, to ensure recalculation on
                     #  reprocess. All this need be is in the path, to be honest
-
                     if var_suffix == "anom":
                         if len(self._anom_clim_splits) < 1 and self._refdir is None:
                             raise ProcessingError("You must provide a list of splits via "
@@ -497,6 +503,7 @@ class NormalisingChannelProcessor(Processor):
 
         return {
             "implementation": "{}:{}".format(self.__module__, self.__class__.__name__),
+            "base_path": self._base_path,
             "anomoly_vars": self._anom_vars,
             "absolute_vars": self.abs_vars,
             "dataset_config": self._dataset_config,
@@ -507,7 +514,9 @@ class NormalisingChannelProcessor(Processor):
             "path": self.path,
             "processed_files": self._processed_files,
             "source_files": self._source_files,
-            "splits": self.splits,
+            "splits": {split: [
+                date for date in dates if date not in self._dropped_split_dates[split]
+            ] for split, dates in self._splits.items()},
         }
 
     @staticmethod
@@ -588,7 +597,6 @@ class NormalisingChannelProcessor(Processor):
 
     @property
     def norm_split_dates(self):
-        # TODO: functools.cached_property, though slightly odd behaviour re. write-ability
         return [date
                 for clim_split in self._normalisation_splits
                 for date in self._splits[clim_split]]

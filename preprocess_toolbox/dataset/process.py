@@ -150,6 +150,9 @@ def rotate_dataset(ref_file: os.PathLike,
                     wind_cubes[vars_to_rotate[1]],
                     angles,
                 )
+            if len(wind_cubes_r[vars_to_rotate[0]].shape) == 2 and len(wind_cubes_r[vars_to_rotate[1]].shape) == 2:
+                wind_cubes_r[vars_to_rotate[0]] = iris.util.new_axis(wind_cubes_r[vars_to_rotate[0]], "time")
+                wind_cubes_r[vars_to_rotate[1]] = iris.util.new_axis(wind_cubes_r[vars_to_rotate[1]], "time")
         except iris.exceptions.CoordinateNotFoundError:
             logging.exception("Failure to rotate due to coordinate issues. "
                               "moving onto next file")
