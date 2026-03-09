@@ -70,66 +70,94 @@ def _get_or_build_transform(source_lats, source_lons, target_lats, target_lons, 
     tree = cKDTree(source_points)
     logging.info(f"KDTree construction complete")
     
-    # Query in chunks to avoid creating full meshgrid in memory
-    chunk_size = 200  # Increased from 50 for better performance (use more if you have RAM)
-    n_lat_chunks = (len(target_lats) - 1) // chunk_size + 1
-    n_target_total = len(target_lats) * len(target_lons)
-    source_indices = np.zeros(n_target_total, dtype=np.int32)
-    
-    logging.info(f"Querying KDTree in {n_lat_chunks} latitude chunks of {chunk_size} rows")
-    
-    idx = 0
-    for lat_chunk_idx in range(0, len(target_lats), chunk_size):
-        lat_end = min(lat_chunk_idx + chunk_size, len(target_lats))
-        chunk_lats = target_lats[lat_chunk_idx:lat_end]
-        chunk_num = lat_chunk_idx // chunk_size + 1
+    # Check if target coordinates are already point arrays (same length) vs separate 1D lat/lon arrays
+    if len(target_lats) == len(target_lons):
+        # Coordinates are already flattened point pairs (e.g., from a 2D grid)
+        # Don't create a meshgrid - use them directly
+        logging.info(f"Target coordinates are pre-flattened point pairs ({len(target_lats)} points)")
+        target_points = np.column_stack([target_lons, target_lats])
+        n_target_total = len(target_lats)
         
-        # Create mini-meshgrid just for this chunk
-        chunk_lon_grid, chunk_lat_grid = np.meshgrid(target_lons, chunk_lats)
+        # Query all points (no chunking needed for point-pair input)
+        logging.info(f"Querying KDTree with {n_target_total} target points...")
+        _, nearest_indices = tree.query(target_points, k=1, workers=-1)
         
-        # Debug: check shapes
-        logging.debug(f"chunk_lats shape: {chunk_lats.shape}, target_lons shape: {target_lons.shape}")
-        logging.debug(f"chunk_lon_grid shape: {chunk_lon_grid.shape}, chunk_lat_grid shape: {chunk_lat_grid.shape}")
+        # Ensure 1D
+        if nearest_indices.ndim > 1:
+            nearest_indices = nearest_indices.ravel()
         
-        chunk_points = np.column_stack([
-            chunk_lon_grid.ravel(),
-            chunk_lat_grid.ravel()
-        ])
+        # Map to original valid indices
+        source_indices = valid_indices[nearest_indices]
         
-        logging.debug(f"chunk_points shape: {chunk_points.shape}")
-        logging.info(f"Processing latitude chunk {chunk_num}/{n_lat_chunks} ({len(chunk_points)} points)")
+        # Infer target shape - will be overridden by caller for 2D grids
+        target_shape = (int(np.sqrt(n_target_total)), int(np.sqrt(n_target_total)))
+        logging.info(f"KDTree query complete")
         
-        # Query this chunk - use all available cores for parallel processing
-        _, nearest_chunk = tree.query(chunk_points, k=1, workers=-1)
+    else:
+        # Separate 1D lat/lon arrays - create meshgrid in chunks
+        # Query in chunks to avoid creating full meshgrid in memory
+        chunk_size = 200  # Increased from 50 for better performance (use more if you have RAM)
+        n_lat_chunks = (len(target_lats) - 1) // chunk_size + 1
+        n_target_total = len(target_lats) * len(target_lons)
+        source_indices = np.zeros(n_target_total, dtype=np.int32)
         
-        # Ensure nearest_chunk is 1D
-        if nearest_chunk.ndim > 1:
-            nearest_chunk = nearest_chunk.ravel()
+        logging.info(f"Querying KDTree in {n_lat_chunks} latitude chunks of {chunk_size} rows")
         
-        # Sanity check
-        if len(nearest_chunk) != len(chunk_points):
-            logging.error(f"Size mismatch: nearest_chunk={len(nearest_chunk)}, chunk_points={len(chunk_points)}")
-            raise ValueError(f"KDTree query returned wrong size: {len(nearest_chunk)} != {len(chunk_points)}")
+        idx = 0
+        for lat_chunk_idx in range(0, len(target_lats), chunk_size):
+            lat_end = min(lat_chunk_idx + chunk_size, len(target_lats))
+            chunk_lats = target_lats[lat_chunk_idx:lat_end]
+            chunk_num = lat_chunk_idx // chunk_size + 1
+            
+            # Create mini-meshgrid just for this chunk
+            chunk_lon_grid, chunk_lat_grid = np.meshgrid(target_lons, chunk_lats)
+            
+            # Debug: check shapes
+            logging.debug(f"chunk_lats shape: {chunk_lats.shape}, target_lons shape: {target_lons.shape}")
+            logging.debug(f"chunk_lon_grid shape: {chunk_lon_grid.shape}, chunk_lat_grid shape: {chunk_lat_grid.shape}")
+            
+            chunk_points = np.column_stack([
+                chunk_lon_grid.ravel(),
+                chunk_lat_grid.ravel()
+            ])
+            
+            logging.debug(f"chunk_points shape: {chunk_points.shape}")
+            logging.info(f"Processing latitude chunk {chunk_num}/{n_lat_chunks} ({len(chunk_points)} points)")
+            
+            # Query this chunk - use all available cores for parallel processing
+            _, nearest_chunk = tree.query(chunk_points, k=1, workers=-1)
+            
+            # Ensure nearest_chunk is 1D
+            if nearest_chunk.ndim > 1:
+                nearest_chunk = nearest_chunk.ravel()
+            
+            # Sanity check
+            if len(nearest_chunk) != len(chunk_points):
+                logging.error(f"Size mismatch: nearest_chunk={len(nearest_chunk)}, chunk_points={len(chunk_points)}")
+                raise ValueError(f"KDTree query returned wrong size: {len(nearest_chunk)} != {len(chunk_points)}")
+            
+            # Store indices
+            chunk_size_actual = len(chunk_points)
+            source_indices[idx:idx+chunk_size_actual] = valid_indices[nearest_chunk]
+            idx += chunk_size_actual
+            
+            # Free chunk memory
+            del chunk_lon_grid, chunk_lat_grid, chunk_points, nearest_chunk
+            
+            if chunk_num % 5 == 0:
+                logging.info(f"Progress: {chunk_num}/{n_lat_chunks} chunks complete ({100*chunk_num/n_lat_chunks:.1f}%)")
         
-        # Store indices
-        chunk_size_actual = len(chunk_points)
-        source_indices[idx:idx+chunk_size_actual] = valid_indices[nearest_chunk]
-        idx += chunk_size_actual
+        logging.info(f"All {n_lat_chunks} chunks processed successfully")
         
-        # Free chunk memory
-        del chunk_lon_grid, chunk_lat_grid, chunk_points, nearest_chunk
-        
-        if chunk_num % 5 == 0:
-            logging.info(f"Progress: {chunk_num}/{n_lat_chunks} chunks complete ({100*chunk_num/n_lat_chunks:.1f}%)")
-    
-    logging.info(f"All {n_lat_chunks} chunks processed successfully")
+        # Target shape for meshgrid case
+        target_shape = (len(target_lats), len(target_lons))
     
     # Clean up to free memory before caching
     del tree, source_points
     gc.collect()
     
-    # Create transform tuple
-    transform = (source_indices, valid_mask, (len(target_lats), len(target_lons)))
+    # Create transform tuple (target_shape was set in the conditional logic above)
+    transform = (source_indices, valid_mask, target_shape)
     
     # Cache in memory
     _GRID_TRANSFORM_CACHE[cache_key] = transform
@@ -231,17 +259,19 @@ def orca_coord_processing(ref_cube, orca_cube):
     target_lats = ref_cube.coord('latitude').points
     target_lons = ref_cube.coord('longitude').points
     
-    # Ensure we have 1D coordinate arrays (not 2D meshgrids)
+    # Handle 2D coordinate grids (e.g., EASE grid projections)
+    # For 2D grids, we can't extract simple 1D lat/lon arrays since each cell has unique coords
+    # Instead, we'll work directly with the 2D grid structure
     if target_lats.ndim > 1:
-        logging.warning(f"Target latitudes are {target_lats.ndim}D, extracting unique values")
-        target_lats = np.unique(target_lats.ravel())
-        target_lats = np.sort(target_lats)
-    if target_lons.ndim > 1:
-        logging.warning(f"Target longitudes are {target_lons.ndim}D, extracting unique values")
-        target_lons = np.unique(target_lons.ravel())
-        target_lons = np.sort(target_lons)
+        logging.info(f"Target grid is 2D ({target_lats.shape}) - using full 2D coordinates for regridding")
+        # For 2D grids, we'll pass the full arrays and let the regridding handle it
+        # The grid shape tells us the output dimensions
+        target_grid_shape = target_lats.shape
+    else:
+        # For 1D coordinate arrays, this is a regular lat/lon grid
+        target_grid_shape = (len(target_lats), len(target_lons))
     
-    logging.info(f"Target grid: {len(target_lats)} lats x {len(target_lons)} lons")
+    logging.info(f"Target grid: {target_grid_shape[0]} x {target_grid_shape[1]} cells")
     
     # Create a cache key based on grid dimensions
     cache_key = f"orca_{orca_cube.shape}_{ref_cube.shape}"
@@ -265,9 +295,30 @@ def orca_coord_processing(ref_cube, orca_cube):
         
         # Get or build the transform ONCE
         cache_key = f"orca_{orca_cube.shape}_{ref_cube.shape}"
-        source_indices, valid_mask, target_shape = _get_or_build_transform(
-            source_lats, source_lons, target_lats, target_lons, cache_key
+        
+        # For 2D target grids, we need to flatten and pass as arrays for KDTree
+        if target_lats.ndim > 1:
+            # 2D grid (e.g., EASE projection) - flatten to create point arrays
+            target_lats_for_transform = target_lats.ravel()
+            target_lons_for_transform = target_lons.ravel()
+            # The output shape comes from the original 2D grid
+            expected_target_shape = target_grid_shape
+        else:
+            # 1D coordinate arrays (regular lat/lon grid)
+            target_lats_for_transform = target_lats
+            target_lons_for_transform = target_lons  
+            expected_target_shape = target_grid_shape
+        
+        source_indices, valid_mask, returned_target_shape = _get_or_build_transform(
+            source_lats, source_lons, target_lats_for_transform, target_lons_for_transform, cache_key
         )
+        
+        # Override the returned shape if we have a 2D target grid
+        # (the transform function creates a meshgrid shape, but we want the actual 2D grid shape)
+        if target_lats.ndim > 1:
+            target_shape = expected_target_shape
+        else:
+            target_shape = returned_target_shape
         
         logging.info(f"Applying cached transform to all {n_times} time steps in vectorized operation")
         
@@ -290,16 +341,23 @@ def orca_coord_processing(ref_cube, orca_cube):
         logging.info(f"Vectorized regridding complete: {regridded_data.shape}")
         
         # Create new iris cube with regridded data
-        # Create proper DimCoords with the 1D coordinate arrays
-        # Apply ellipsoid from ref_cube's coordinate system for compatibility
-        lat_coord = DimCoord(target_lats, standard_name='latitude', units='degrees')
-        lon_coord = DimCoord(target_lons, standard_name='longitude', units='degrees')
-        
-        # Apply the ellipsoid (not the full projected coordinate system) for compatibility
-        if ref_cube.coord_system() is not None:
-            cs_ellipsoid = ref_cube.coord_system().ellipsoid
-            lat_coord.coord_system = cs_ellipsoid
-            lon_coord.coord_system = cs_ellipsoid
+        # Handle both 1D (regular lat/lon) and 2D (projected) grids
+        if target_lats.ndim == 1:
+            # Regular lat/lon grid - create 1D DimCoords
+            lat_coord = DimCoord(target_lats, standard_name='latitude', units='degrees')
+            lon_coord = DimCoord(target_lons, standard_name='longitude', units='degrees')
+            
+            # Apply the ellipsoid (not the full projected coordinate system) for compatibility
+            if ref_cube.coord_system() is not None:
+                cs_ellipsoid = ref_cube.coord_system().ellipsoid
+                lat_coord.coord_system = cs_ellipsoid
+                lon_coord.coord_system = cs_ellipsoid
+        else:
+            # 2D projected grid (e.g., EASE) - copy auxiliary coordinates from reference cube
+            # This preserves the projection information and coordinate structure
+            logging.info("Using 2D auxiliary coordinates from reference cube (projected grid)")
+            lat_coord = ref_cube.coord('latitude').copy()
+            lon_coord = ref_cube.coord('longitude').copy()
         
         # Get time coordinate and shift to end-of-month
         time_coord = orca_cube.coord('time').copy()
@@ -330,14 +388,40 @@ def orca_coord_processing(ref_cube, orca_cube):
         
         logging.info(f"Shifted ORCA time coordinates from mid-month to end-of-month and normalized to midnight")
         
-        regridded_cube = iris.cube.Cube(
-            regridded_data,
-            dim_coords_and_dims=[
-                (time_coord, 0),
-                (lat_coord, 1),
-                (lon_coord, 2)
-            ]
-        )
+        # Create iris cube with appropriate coordinate structure
+        if target_lats.ndim == 1:
+            # 1D coordinates - use as dimension coordinates
+            regridded_cube = iris.cube.Cube(
+                regridded_data,
+                dim_coords_and_dims=[
+                    (time_coord, 0),
+                    (lat_coord, 1),
+                    (lon_coord, 2)
+                ]
+            )
+        else:
+            # 2D coordinates - use as auxiliary coordinates with simple dimension coordinates
+            from iris.coords import DimCoord as DC
+            # Create simple dimension coordinates for the spatial dimensions
+            yc_coord = DC(np.arange(target_shape[0]), long_name='yc', units='1')
+            xc_coord = DC(np.arange(target_shape[1]), long_name='xc', units='1')
+            
+            regridded_cube = iris.cube.Cube(
+                regridded_data,
+                dim_coords_and_dims=[
+                    (time_coord, 0),
+                    (yc_coord, 1),
+                    (xc_coord, 2)
+                ],
+                aux_coords_and_dims=[
+                    (lat_coord, (1, 2)),
+                    (lon_coord, (1, 2))
+                ]
+            )
+            
+            # Also copy the coordinate system from reference cube
+            if ref_cube.coord_system() is not None:
+                regridded_cube.add_aux_coord(ref_cube.coord_system())
     else:  # 2D: y, x
         orca_data = xr.DataArray(
             orca_cube.data,
@@ -349,24 +433,50 @@ def orca_coord_processing(ref_cube, orca_cube):
         )
         regridded_data = regrid_orca_to_latlon(orca_data, target_lats, target_lons, cache_key=cache_key)
         
-        # Create proper DimCoords with the 1D coordinate arrays
-        # Apply ellipsoid from ref_cube's coordinate system for compatibility
-        lat_coord = DimCoord(target_lats, standard_name='latitude', units='degrees')
-        lon_coord = DimCoord(target_lons, standard_name='longitude', units='degrees')
-        
-        # Apply the ellipsoid (not the full projected coordinate system) for compatibility
-        if ref_cube.coord_system() is not None:
-            cs_ellipsoid = ref_cube.coord_system().ellipsoid
-            lat_coord.coord_system = cs_ellipsoid
-            lon_coord.coord_system = cs_ellipsoid
-        
-        regridded_cube = iris.cube.Cube(
-            regridded_data.values,
-            dim_coords_and_dims=[
-                (lat_coord, 0),
-                (lon_coord, 1)
-            ]
-        )
+        # Handle both 1D (regular lat/lon) and 2D (projected) grids
+        if target_lats.ndim == 1:
+            # Regular lat/lon grid - create 1D DimCoords
+            lat_coord = DimCoord(target_lats, standard_name='latitude', units='degrees')
+            lon_coord = DimCoord(target_lons, standard_name='longitude', units='degrees')
+            
+            # Apply the ellipsoid for compatibility
+            if ref_cube.coord_system() is not None:
+                cs_ellipsoid = ref_cube.coord_system().ellipsoid
+                lat_coord.coord_system = cs_ellipsoid
+                lon_coord.coord_system = cs_ellipsoid
+            
+            regridded_cube = iris.cube.Cube(
+                regridded_data.values,
+                dim_coords_and_dims=[
+                    (lat_coord, 0),
+                    (lon_coord, 1)
+                ]
+            )
+        else:
+            # 2D projected grid - copy auxiliary coordinates from reference
+            logging.info("Using 2D auxiliary coordinates from reference cube (projected grid)")
+            lat_coord = ref_cube.coord('latitude').copy()
+            lon_coord = ref_cube.coord('longitude').copy()
+            
+            # Create simple dimension coordinates
+            yc_coord = DimCoord(np.arange(target_grid_shape[0]), long_name='yc', units='1')
+            xc_coord = DimCoord(np.arange(target_grid_shape[1]), long_name='xc', units='1')
+            
+            regridded_cube = iris.cube.Cube(
+                regridded_data.values,
+                dim_coords_and_dims=[
+                    (yc_coord, 0),
+                    (xc_coord, 1)
+                ],
+                aux_coords_and_dims=[
+                    (lat_coord, (0, 1)),
+                    (lon_coord, (0, 1))
+                ]
+            )
+            
+            # Copy coordinate system
+            if ref_cube.coord_system() is not None:
+                regridded_cube.add_aux_coord(ref_cube.coord_system())
     
     # Copy metadata from original cube
     regridded_cube.standard_name = orca_cube.standard_name
