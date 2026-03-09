@@ -71,7 +71,7 @@ def _get_or_build_transform(source_lats, source_lons, target_lats, target_lons, 
     logging.info(f"KDTree construction complete")
     
     # Query in chunks to avoid creating full meshgrid in memory
-    chunk_size = 50  # Process 50 rows of target grid at a time
+    chunk_size = 200  # Increased from 50 for better performance (use more if you have RAM)
     n_lat_chunks = (len(target_lats) - 1) // chunk_size + 1
     n_target_total = len(target_lats) * len(target_lons)
     source_indices = np.zeros(n_target_total, dtype=np.int32)
@@ -99,8 +99,8 @@ def _get_or_build_transform(source_lats, source_lons, target_lats, target_lons, 
         logging.debug(f"chunk_points shape: {chunk_points.shape}")
         logging.info(f"Processing latitude chunk {chunk_num}/{n_lat_chunks} ({len(chunk_points)} points)")
         
-        # Query this chunk
-        _, nearest_chunk = tree.query(chunk_points, k=1, workers=1)
+        # Query this chunk - use all available cores for parallel processing
+        _, nearest_chunk = tree.query(chunk_points, k=1, workers=-1)
         
         # Ensure nearest_chunk is 1D
         if nearest_chunk.ndim > 1:
@@ -249,26 +249,45 @@ def orca_coord_processing(ref_cube, orca_cube):
     # Convert ORCA cube to xarray for easier handling
     # Handle potential time dimension
     if orca_cube.ndim == 3:  # time, y, x
-        regridded_slices = []
         n_times = orca_cube.shape[0]
-        logging.info(f"Processing {n_times} time steps")
+        logging.info(f"Processing {n_times} time steps with vectorized regridding")
         
-        for time_idx in range(n_times):
-            if time_idx % 5 == 0:
-                logging.info(f"Processing time step {time_idx + 1}/{n_times}")
-            orca_slice = orca_cube[time_idx]
-            orca_data = xr.DataArray(
-                orca_slice.data,
-                coords={
-                    'nav_lat': (['y', 'x'], orca_slice.coord('latitude').points),
-                    'nav_lon': (['y', 'x'], orca_slice.coord('longitude').points)
-                },
-                dims=['y', 'x']
-            )
-            regridded_slice = regrid_orca_to_latlon(orca_data, target_lats, target_lons, cache_key=cache_key)
-            regridded_slices.append(regridded_slice.values)
+        # Get the transform once (will be cached after first call)
+        # Use first time slice to build/retrieve the transform
+        orca_slice_0 = orca_cube[0]
         
-        regridded_data = np.stack(regridded_slices)
+        # Get 2D lat/lon coordinates from ORCA data (same for all time steps)
+        if hasattr(orca_slice_0.coord('latitude'), 'points'):
+            source_lats = orca_slice_0.coord('latitude').points
+            source_lons = orca_slice_0.coord('longitude').points
+        else:
+            raise ValueError("Cannot find latitude/longitude coordinates in ORCA data")
+        
+        # Get or build the transform ONCE
+        cache_key = f"orca_{orca_cube.shape}_{ref_cube.shape}"
+        source_indices, valid_mask, target_shape = _get_or_build_transform(
+            source_lats, source_lons, target_lats, target_lons, cache_key
+        )
+        
+        logging.info(f"Applying cached transform to all {n_times} time steps in vectorized operation")
+        
+        # Extract all time slices as a 3D array: (time, y, x)
+        orca_3d = orca_cube.data  # Shape: (n_times, y, x)
+        
+        # Reshape to (time, flattened_space)
+        orca_flat = orca_3d.reshape(n_times, -1)  # Shape: (n_times, y*x)
+        
+        # Apply the transform to all time steps at once using fancy indexing
+        # source_indices maps each target point to its source point
+        # Broadcasting applies the same index pattern to all time steps simultaneously
+        regridded_flat = orca_flat[:, source_indices]  # Shape: (n_times, n_target_points)
+        
+        logging.info(f"Applied transform to all {n_times} time steps in single vectorized operation")
+        
+        # Reshape to (time, target_lat, target_lon)
+        regridded_data = regridded_flat.reshape(n_times, target_shape[0], target_shape[1])
+        
+        logging.info(f"Vectorized regridding complete: {regridded_data.shape}")
         
         # Create new iris cube with regridded data
         # Create proper DimCoords with the 1D coordinate arrays
