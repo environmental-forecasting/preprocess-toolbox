@@ -273,9 +273,6 @@ def orca_coord_processing(ref_cube, orca_cube):
     
     logging.info(f"Target grid: {target_grid_shape[0]} x {target_grid_shape[1]} cells")
     
-    # Create a cache key based on grid dimensions
-    cache_key = f"orca_{orca_cube.shape}_{ref_cube.shape}"
-    
     # Convert ORCA cube to xarray for easier handling
     # Handle potential time dimension
     if orca_cube.ndim == 3:  # time, y, x
@@ -293,8 +290,9 @@ def orca_coord_processing(ref_cube, orca_cube):
         else:
             raise ValueError("Cannot find latitude/longitude coordinates in ORCA data")
         
-        # Get or build the transform ONCE
-        cache_key = f"orca_{orca_cube.shape}_{ref_cube.shape}"
+        # Create cache key based on SPATIAL dimensions only (not time)
+        # This ensures cache is reused across files with different time dimensions
+        cache_key = f"orca_{source_lats.shape}_{target_grid_shape}"
         
         # For 2D target grids, we need to flatten and pass as arrays for KDTree
         if target_lats.ndim > 1:
@@ -423,11 +421,18 @@ def orca_coord_processing(ref_cube, orca_cube):
             if ref_cube.coord_system() is not None:
                 regridded_cube.add_aux_coord(ref_cube.coord_system())
     else:  # 2D: y, x
+        # Get source coordinates
+        source_lats = orca_cube.coord('latitude').points
+        source_lons = orca_cube.coord('longitude').points
+        
+        # Create cache key based on spatial dimensions only
+        cache_key = f"orca_{source_lats.shape}_{target_grid_shape}"
+        
         orca_data = xr.DataArray(
             orca_cube.data,
             coords={
-                'nav_lat': (['y', 'x'], orca_cube.coord('latitude').points),
-                'nav_lon': (['y', 'x'], orca_cube.coord('longitude').points)
+                'nav_lat': (['y', 'x'], source_lats),
+                'nav_lon': (['y', 'x'], source_lons)
             },
             dims=['y', 'x']
         )
