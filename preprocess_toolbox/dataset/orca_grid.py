@@ -416,10 +416,6 @@ def orca_coord_processing(ref_cube, orca_cube):
                     (lon_coord, (1, 2))
                 ]
             )
-            
-            # Also copy the coordinate system from reference cube
-            if ref_cube.coord_system() is not None:
-                regridded_cube.add_aux_coord(ref_cube.coord_system())
     else:  # 2D: y, x
         # Get source coordinates
         source_lats = orca_cube.coord('latitude').points
@@ -478,10 +474,6 @@ def orca_coord_processing(ref_cube, orca_cube):
                     (lon_coord, (0, 1))
                 ]
             )
-            
-            # Copy coordinate system
-            if ref_cube.coord_system() is not None:
-                regridded_cube.add_aux_coord(ref_cube.coord_system())
     
     # Copy metadata from original cube
     regridded_cube.standard_name = orca_cube.standard_name
