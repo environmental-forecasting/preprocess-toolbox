@@ -398,11 +398,13 @@ def orca_coord_processing(ref_cube, orca_cube):
                 ]
             )
         else:
-            # 2D coordinates - use as auxiliary coordinates with simple dimension coordinates
+            # 2D coordinates - copy ALL spatial coordinates from reference cube to ensure exact match
+            # This allows iris.regrid() to recognize the cube is already on the target grid
             from iris.coords import DimCoord as DC
-            # Create simple dimension coordinates for the spatial dimensions
-            yc_coord = DC(np.arange(target_shape[0]), long_name='yc', units='1')
-            xc_coord = DC(np.arange(target_shape[1]), long_name='xc', units='1')
+            
+            # Copy dimension coordinates from reference cube (yc, xc)
+            yc_coord = ref_cube.coord(axis='Y', dim_coords=True).copy()
+            xc_coord = ref_cube.coord(axis='X', dim_coords=True).copy()
             
             regridded_cube = iris.cube.Cube(
                 regridded_data,
@@ -410,12 +412,16 @@ def orca_coord_processing(ref_cube, orca_cube):
                     (time_coord, 0),
                     (yc_coord, 1),
                     (xc_coord, 2)
-                ],
-                aux_coords_and_dims=[
-                    (lat_coord, (1, 2)),
-                    (lon_coord, (1, 2))
                 ]
             )
+            
+            # Copy ALL auxiliary coordinates from reference cube to match exactly
+            # This includes lat/lon and any projection coordinates
+            for aux_coord in ref_cube.aux_coords:
+                dims = ref_cube.coord_dims(aux_coord)
+                # Only copy spatial coordinates (not time-related ones)
+                if dims and all(d > 0 for d in dims):  # Skip time dimension (0)
+                    regridded_cube.add_aux_coord(aux_coord.copy(), [d for d in dims])
     else:  # 2D: y, x
         # Get source coordinates
         source_lats = orca_cube.coord('latitude').points
@@ -454,26 +460,26 @@ def orca_coord_processing(ref_cube, orca_cube):
                 ]
             )
         else:
-            # 2D projected grid - copy auxiliary coordinates from reference
+            # 2D projected grid - copy ALL coordinates from reference to ensure exact match
             logging.info("Using 2D auxiliary coordinates from reference cube (projected grid)")
-            lat_coord = ref_cube.coord('latitude').copy()
-            lon_coord = ref_cube.coord('longitude').copy()
             
-            # Create simple dimension coordinates
-            yc_coord = DimCoord(np.arange(target_grid_shape[0]), long_name='yc', units='1')
-            xc_coord = DimCoord(np.arange(target_grid_shape[1]), long_name='xc', units='1')
+            # Copy dimension coordinates from reference cube (yc, xc)
+            yc_coord = ref_cube.coord(axis='Y', dim_coords=True).copy()
+            xc_coord = ref_cube.coord(axis='X', dim_coords=True).copy()
             
             regridded_cube = iris.cube.Cube(
                 regridded_data.values,
                 dim_coords_and_dims=[
                     (yc_coord, 0),
                     (xc_coord, 1)
-                ],
-                aux_coords_and_dims=[
-                    (lat_coord, (0, 1)),
-                    (lon_coord, (0, 1))
                 ]
             )
+            
+            # Copy ALL auxiliary coordinates from reference cube to match exactly
+            for aux_coord in ref_cube.aux_coords:
+                dims = ref_cube.coord_dims(aux_coord)
+                if dims:  # Copy all spatial auxiliary coords
+                    regridded_cube.add_aux_coord(aux_coord.copy(), list(dims))
     
     # Copy metadata from original cube
     regridded_cube.standard_name = orca_cube.standard_name
