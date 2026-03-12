@@ -73,6 +73,16 @@ def create():
         masks=dict(),
         channels=dict(),
     )
+    
+    # Read VAR_LAG_OVERRIDE from environment if set
+    var_lag_override = os.environ.get('VAR_LAG_OVERRIDE', None)
+    if var_lag_override:
+        try:
+            data['var_lag_override'] = orjson.loads(var_lag_override)
+            logging.info("Added var_lag_override from environment: {}".format(var_lag_override))
+        except orjson.JSONDecodeError as e:
+            logging.warning("Invalid VAR_LAG_OVERRIDE in environment ({}), skipping: {}".format(e, var_lag_override))
+    
     destination_path = get_config_filename(args)
 
     if not os.path.exists(destination_path):
